@@ -1,0 +1,1944 @@
+---
+title: "DivvyBikes Project"
+author: TeamDivvy - {Venkata Anirudh Thota | Swinidhi Manchiganti | Prasad Chandrakant
+  Patil | Meghana Pamu}
+date: "4/30/2020"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = F)
+```
+
+## PROJECT : ANALYSIS OF DIVVY BIKE SHARE DATA AND INFLUENCE OF EXTERNAL FACTORS
+
+### Introduction: 
+Divvy is a bike share company that has smart bikes setup across various bikes stands in the City of Chicago. User will need to install an app and book bikes that are present at the stands to use them for commuting purposes in the City. The main reason for choosing this data set is due to the fact that this data can be combined with other datasets such as weather, pollution, census etc. This will help in providing exposure to different type of variables and enable us to explore various efficient data manipulations and analysis techniques due to the richness in the variables available. 
+
+### About Data:
+Divvy Bikes has stored data of these bookings and made it public for people across the globe to analyze. The data ranges from 2012 till 2019 in various files that are segregated by quarters (i.e., Q1 2019, Q2 2019,Q3 2019,Q4 2019) and also some in months (M7 2017 etc.). Apart from these files, there is another file that Divvy has posted  that contains data about locations of their different bike stations along with the capacity of the station.
+
+### External Data:
+We have in our analysis also planned to include external factors such as temperature of the city and other climatic conditions that play role how the bookings are made.
+
+#### STEPS 1 TO 11: Data Wrangling
+Describe the process we did to clean and organize data set for analysis
+
+#### STEP 12: Data Inspection
+Here we are inspecting the data formatting and presence of NA's in the data set
+
+#### STEP 13: Deep Dive On Data And Dataset Boundaries
+Now we are trying to understand data, the extremities and statistical figures
+
+#### STEP 14: Data Visualizations
+We are looking at charts to identify patterns and run models on them in the next phase
+
+#### STEP 15: Data Analysis And Modeling
+Here we are analysis for the significance of the model and making predictions based out of it.
+
+***
+***
+***
+
+### STEP 1: LOAD REQUIRED LIBRARIES
+
+In the first step here we are loading the required libraries 
+```{r}
+library(tidyverse)
+library(sparklyr)
+library(corrr)
+library(factoextra)
+library(cluster)
+library(modelr)
+library(broom)
+library(timeDate)
+library(ROCR)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(rgeos)
+library(maps)
+library(lwgeom)
+library(kernlab)     
+library(e1071)       
+library(ISLR)        
+library(RColorBrewer)
+library(ggplot2)
+library(scales)
+
+#Using already backed up data to save load and time on machine
+
+load(file = "Bkp\\TidyDivvy_For_Analysis_Final.rda")
+load(file = "Bkp\\Divvy_Trips_Complete.rda")
+Divvy_Complete_count <- count(Divvy_Complete)
+rm(Divvy_Complete)
+```
+
+***
+***
+
+### STEP 2: READ BOOKING FILES FOR LAST FIVE YEARS AND MERGE THEM
+
+Since Divvy is offering data in separate csv files for each quarter with the following columns [trip_id,start_time,end_time,bikeid,tripduration,from_station_id,from_station_name,to_station_id,to_station_name,usertype,gender,birthyear].
+We have imported the data and standardized them in to one single data type for each column so that we do not run into issues when doing union of the tibbles. Finally merged all the data and assined it to one variable.
+
+```{r eval=FALSE}
+#Eval set to false to save load and time on machine
+
+# Collect 2019 Data
+q1_19 <- read_csv("Data\\Divvy_Trips_2019_Q1.csv")
+q2_19 <- read_csv("Data\\Divvy_Trips_2019_Q2.csv",col_types = cols(start_time = col_datetime(format = "%m/%d/%Y %H:%M"),end_time=col_datetime(format = "%m/%d/%Y %H:%M")))
+read_csv("Data\\Divvy_Trips_2019_Q2.csv")
+q3_19 <- read_csv("Data\\Divvy_Trips_2019_Q3.csv")
+q4_19 <- read_csv("Data\\Divvy_Trips_2019_Q4.csv")
+
+Divvy2019 <- q1_19 %>% union(q2_19) %>% union(q3_19) %>% union(q4_19)
+
+# Collect 2018 Data
+q1_18 <- read_csv("Data\\Divvy_Trips_2018_Q1.csv",col_types = cols(start_time = col_datetime(format = "%m/%d/%Y %H:%M"),end_time=col_datetime(format = "%m/%d/%Y %H:%M")))
+q2_18 <- read_csv("Data\\Divvy_Trips_2018_Q2.csv")#,col_types = cols(start_time = col_datetime(format = "%m/%d/%Y %H:%M"),end_time=col_datetime(format = "%m/%d/%Y %H:%M")))
+q3_18 <- read_csv("Data\\Divvy_Trips_2018_Q3.csv")
+q4_18 <- read_csv("Data\\Divvy_Trips_2018_Q4.csv")
+
+Divvy2018 <- q1_18 %>% union(q2_18) %>% union(q3_18) %>% union(q4_18)
+
+# Collect 2017 Data
+q1_17 <- read_csv("Data\\Divvy_Trips_2017_Q1.csv",col_types = cols(start_time = col_datetime(format = "%m/%d/%Y %H:%M:%S"),end_time=col_datetime(format = "%m/%d/%Y %H:%M:%S")))
+q2_17 <- read_csv("Data\\Divvy_Trips_2017_Q2.csv",col_types = cols(start_time = col_datetime(format = "%m/%d/%Y %H:%M:%S"),end_time=col_datetime(format = "%m/%d/%Y %H:%M:%S")))
+q3_17 <- read_csv("Data\\Divvy_Trips_2017_Q3.csv",col_types = cols(start_time = col_datetime(format = "%m/%d/%Y %H:%M:%S"),end_time=col_datetime(format = "%m/%d/%Y %H:%M:%S")))
+q4_17 <- read_csv("Data\\Divvy_Trips_2017_Q4.csv",col_types = cols(start_time = col_datetime(format = "%m/%d/%Y %H:%M"),end_time=col_datetime(format = "%m/%d/%Y %H:%M")))
+
+Divvy2017 <- q1_17 %>% union(q2_17) %>% union(q3_17) %>% union(q4_17)
+
+# Collect 2016 Data
+q1_16 <- read_csv("Data\\Divvy_Trips_2016_Q1.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M")))
+q1_16 <- q1_16  %>% rename(start_time=starttime,end_time=stoptime)
+m4_16 <- read_csv("Data\\Divvy_Trips_2016_04.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M")))
+m4_16 <- m4_16  %>% rename(start_time=starttime,end_time=stoptime)
+m5_16 <- read_csv("Data\\Divvy_Trips_2016_05.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M")))
+m5_16 <- m5_16  %>% rename(start_time=starttime,end_time=stoptime)
+m6_16 <- read_csv("Data\\Divvy_Trips_2016_06.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M")))
+m6_16 <- m6_16  %>% rename(start_time=starttime,end_time=stoptime)
+q3_16 <- read_csv("Data\\Divvy_Trips_2016_Q3.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M:%S"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M:%S")))
+q3_16 <- q3_16  %>% rename(start_time=starttime,end_time=stoptime)
+q4_16 <- read_csv("Data\\Divvy_Trips_2016_Q4.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M:%S"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M:%S")))
+q4_16 <- q4_16  %>% rename(start_time=starttime,end_time=stoptime)
+
+Divvy2016 <- q1_16 %>% union(m4_16) %>% union(m5_16) %>% union(m6_16) %>% union(q3_16) %>% union(q4_16)
+
+# Collect 2015 Data
+q1_15 <- read_csv("Data\\Divvy_Trips_2015-Q1.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M")))
+q1_15 <- q1_15  %>% rename(start_time=starttime,end_time=stoptime)
+q2_15 <- read_csv("Data\\Divvy_Trips_2015-Q2.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M")))
+q2_15 <- q2_15  %>% rename(start_time=starttime,end_time=stoptime)
+m7_15 <- read_csv("Data\\Divvy_Trips_2015_07.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M")))
+m7_15 <- m7_15  %>% rename(start_time=starttime,end_time=stoptime)
+m8_15 <- read_csv("Data\\Divvy_Trips_2015_08.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M")))
+m8_15 <- m8_15  %>% rename(start_time=starttime,end_time=stoptime)
+m9_15 <- read_csv("Data\\Divvy_Trips_2015_09.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M")))
+m9_15 <- m9_15  %>% rename(start_time=starttime,end_time=stoptime)
+q4_15 <- read_csv("Data\\Divvy_Trips_2015_Q4.csv",col_types = cols(starttime = col_datetime(format = "%m/%d/%Y %H:%M"),stoptime=col_datetime(format = "%m/%d/%Y %H:%M")))
+q4_15 <- q4_15  %>% rename(start_time=starttime,end_time=stoptime)
+
+Divvy2015 <- q1_15 %>% union(q2_15) %>% union(m7_15) %>% union(m8_15) %>% union(m9_15) %>% union(q4_15)
+  
+Divvy_Complete <- Divvy2015 %>% union(Divvy2016) %>% union(Divvy2017) %>% union(Divvy2018) %>% union(Divvy2019) 
+
+Divvy_Complete %>% print(width=Inf)
+```
+
+***
+***
+
+### STEP 3: BACKUP BOOKING DATA
+
+We are taking a sample of 1 million records and working with the same. Also as a precautionary measure we are creating a backup for each of the data points. 
+
+```{r eval=FALSE}
+Divvy_bkp_list = list(Divvy2015,Divvy2016,Divvy2017,Divvy2018,Divvy2019,Divvy_Complete)
+#save(Divvy_bkp_list,file="Bkp\\Divvy_Trips.rda")
+
+#Divvy <- Divvy_Complete %>%  sample_n(1000000)
+#save(Divvy,file="Bkp\\Divvy.rda")
+
+#DO NOT CHANGE CODE IN THIS CHUNK
+# SINCE WE HAVE NOT USED SEED DURING THE START OF THE PROJECT, LOADING THE FILE FROM BACKUP TO MAINTAIN CONSISTENCY
+load(file = "Bkp\\Divvy.rda")
+```
+
+***
+***
+
+### STEP 4: CLEAR UNUSED OBJECTS
+
+Removing unwanted variables to free memory for faster processing
+
+```{r eval=FALSE}
+Divvy_Complete_count <- count(Divvy_Complete)
+rm(q1_19,q2_19,q3_19,q4_19,q1_18,q2_18,q3_18,q4_18,Divvy2018,Divvy2019,Divvy2017,q1_17,q2_17,q3_17,q4_17,Divvy2016,q1_16,m4_16,m5_16,m6_16,q3_16,q4_16,Divvy2015,q1_15,q2_15,m7_15,m8_15,m9_15,q4_15,Divvy_bkp_list,Divvy_Complete)
+```
+
+***
+***
+
+### STEP 5: TIDYING/INSPECTING BOOKINGS DATA SET
+
+In this step we are tidying the divvy bookings data:
+
+1. We are splitting the date time column into Day,Month,Year,Time columns respectively.
+
+2. Instead of having BirthDay column we are calculating the Age of the person
+
+Also we are verifying the output.
+
+```{r eval=FALSE}
+TidyDivvy <- Divvy %>%  
+  mutate(Ride_Start_Time= as.integer(format(start_time,"%H%M")),Ride_End_Time=as.integer(format(end_time,"%H%M"))) %>% 
+  mutate(Ride_Start_Date=as.Date(start_time),Ride_End_Date=as.Date(end_time)) %>% 
+  mutate(Age = as.numeric(format(Sys.Date(),"%Y"))-birthyear) %>% 
+  separate(Ride_Start_Date,into = c("Ride_Start_Year","Ride_Start_Month","Ride_Start_Day"),sep = "-") %>%
+  separate(Ride_End_Date,into = c("Ride_End_Year","Ride_End_Month","Ride_End_Day"),sep = "-") %>% 
+  mutate(Ride_Start_Year=as.integer(Ride_Start_Year),Ride_Start_Month=as.integer(Ride_Start_Month),Ride_Start_Day=as.integer(Ride_Start_Day),Ride_End_Year=as.integer(Ride_End_Year),Ride_End_Month=as.integer(Ride_End_Month),Ride_End_Day=as.integer(Ride_End_Day),birthyear =as.factor(birthyear))
+
+TidyDivvy %>% print(width=Inf)
+```
+
+***
+***
+
+### STEP 6: READING STATIONS DATASET AND MERGING WITH BOOKINGS
+
+In this step we are adding station details data to the original bookings dataset to get the GPS location of the station
+
+```{r eval=FALSE}
+Stations <- read_csv("Data\\Divvy_Bicycle_Stations.csv")
+
+TidyDivvy_GPS_1 <-  TidyDivvy %>% left_join(Stations,by = c("from_station_id"="ID")) %>% select(-`Station Name`,-`Total Docks`,-`Docks in Service`,-Status,-Latitude,-Longitude) %>% rename(From_Loc_GPS=Location)
+
+TidyDivvy_GPS <-  TidyDivvy_GPS_1 %>% left_join(Stations,by = c("to_station_id"="ID")) %>% select(-`Station Name`,-`Total Docks`,-`Docks in Service`,-Status,-Latitude,-Longitude) %>% rename(To_Loc_GPS=Location)
+
+Stations %>% print(width=Inf)
+```
+
+***
+***
+
+### STEP 7: INSPECT DIVVY BIKES COMBINED DATA SET
+
+Inspect GPS combined dataset cleaning unwanted objects
+
+```{r eval=FALSE}
+TidyDivvy_GPS %>% print(width=Inf)
+```
+
+***
+***
+
+### STEP 8: READ TEMPARTURE DATA FOR LAST TWO YEARS
+
+Reading temperature data
+
+```{r eval=FALSE}
+temp_18 <- read_csv("Data\\weather_2018_chicago.csv",col_types = cols(Date = col_date(format = "%m/%d/%Y")))
+temp_19 <- read_csv("Data\\weather_2019_chicago.csv",col_types = cols(Date = col_date(format = "%m/%d/%Y")))
+temp_15_16_17 <- read_csv("Data\\weather151617chicago.csv",col_types = cols(Date = col_date(format = "%m/%d/%Y")))
+```
+
+***
+***
+
+### STEP 9: TIDY TEMPARTURE DATA AND MERGE IT
+
+Tidying temperature data and combining the five year data into one tibble variable.
+Note: There are few columns in temperature data such as (Precipitation and New Snow and Snow Depth), that have value as T. T according to NOAA is <0.001 inches, so we are converting that to 0 (assumption here is 0.001 inches of rain/snow is negligible amount). Link: <https://www.weather.gov/climateservices/nowdatafaq>
+
+```{r eval=FALSE}
+tidy_temp_18 <- temp_18 %>% 
+  mutate(Precip = if_else(Precipitation == "T",0,as.double(Precipitation))) %>%
+  mutate(New_snow = if_else(`New Snow` == "T",0,as.double(`New Snow`))) %>%  
+  rename(Snow_depth = `Snow Depth`) %>% 
+  select(-Precipitation,-`New Snow`)
+
+tidy_temp_19 <- temp_19 %>% 
+  mutate(Precip = if_else(Precipitation == "T",0,as.double(Precipitation))) %>%
+  mutate(New_snow = if_else(`New Snow` == "T",0,as.double(`New Snow`))) %>%
+  mutate(Snow_depth = if_else(`Snow Depth` == "T",0,as.double(`Snow Depth`))) %>% 
+  select(-Precipitation,-`New Snow`,-`Snow Depth`)
+
+tidy_temp_15_16_17 <- temp_15_16_17 %>% 
+  mutate(Precip = if_else(Precipitation == "T",0,as.double(Precipitation))) %>%
+  mutate(New_snow = if_else(`New Snow` == "T",0,as.double(`New Snow`))) %>%
+  mutate(Snow_depth = if_else(`Snow Depth` == "T",0,as.double(`Snow Depth`))) %>% 
+  select(-Precipitation,-`New Snow`,-`Snow Depth`)
+
+temparature <- tidy_temp_19 %>% union(tidy_temp_18) %>% union(tidy_temp_15_16_17)
+
+tidy_temparature <-  temparature %>% 
+  separate(Date,into =c("Year","Month","Day"),sep = "-",convert = T) %>% 
+  rename(Temp_Max=`Temperature Max`,Temp_Min=`Temperature Min`,Temp_Avg=`Temperature Avg`,Temp_Dep=`Temperature Dep`) %>% 
+  mutate(Year=as.integer(Year),Month=as.integer(Month),Day=as.integer(Day)) %>% 
+  select(-HDD,-CDD)
+
+tidy_temparature %>% print(width=Inf)
+```
+
+***
+***
+
+### STEP 10: MERGE DIVVY BIKES AND TEMPERATURE DATA SET
+
+Combing the bikes resevation and temperature data using day as the combining factor.
+
+```{r eval=FALSE}
+TidyDivvy_GPS_Temp <-  TidyDivvy_GPS %>% inner_join(tidy_temparature,by = c("Ride_Start_Year"="Year","Ride_Start_Month"="Month","Ride_Start_Day"="Day"))
+
+TidyDivvy_GPS_Temp %>% print(width=Inf)
+```
+
+***
+***
+
+### STEP 11: BACKUP TIDY DATA CLEAN ENVIRONMENT
+
+Backing up all tidy data and cleaning unused objects for improving performance
+
+```{r eval=FALSE}
+TidyDivvy_list = list(TidyDivvy,TidyDivvy_GPS,TidyDivvy_GPS_Temp,tidy_temparature)
+#save(TidyDivvy_list,file="Bkp\\TidyDivvy.rda")
+
+rm(Divvy,TidyDivvy,TidyDivvy_GPS_1,temp_18,temp_19,temp_15_16_17,tidy_temp_18,tidy_temp_19,tidy_temp_15_16_17,temparature,TidyDivvy_GPS)
+```
+
+***
+***
+
+### STEP 12: INSPECT DATA
+
+Inspect if all columns are of the right data type for analysis.
+We are checking if there are any records in the sample data set that are not of the correct data type and displaying the output
+
+```{r eval=FALSE}
+#Create a variable specific for the analysis purpose, modifying trip duration from seconds to minutes
+TidyDivvy_For_Analysis <- TidyDivvy_GPS_Temp %>% mutate(Ride_Start_Year=as.factor(Ride_Start_Year),Ride_Start_Month=as.factor(Ride_Start_Month),Ride_Start_Day=as.factor(Ride_Start_Day),Ride_End_Year=as.factor(Ride_End_Year),Ride_End_Month=as.factor(Ride_End_Month),Ride_End_Day=as.factor(Ride_End_Day),tripduration=tripduration/60)
+
+#Inspect if there are any formatting issues in the dataset
+TidyDivvy_For_Analysis %>% filter(
+!is.double(trip_id) |
+!is.double(bikeid) |
+!is.double(tripduration) |
+!is.double(from_station_id) |
+!is.double(to_station_id)|
+!is.double(Age ) |
+!is.double(Temp_Max ) |
+!is.double(Temp_Min ) |
+!is.double(Temp_Avg ) |
+!is.double(Temp_Dep ) |
+!is.double(Precip ) |
+!is.double(New_snow ) |
+!is.double(Snow_depth)  |
+!is.character(from_station_name) |
+!is.character(to_station_name) |
+!is.character(usertype) |
+!is.character(gender) |
+!is.character(From_Loc_GPS) |
+!is.character(To_Loc_GPS) |
+!is.integer(Ride_Start_Time) |
+!is.integer(Ride_End_Time) |
+!is.factor(Ride_Start_Year) |
+!is.factor(Ride_Start_Month) |
+!is.factor(Ride_Start_Day) |
+!is.factor(Ride_End_Year) |
+!is.factor(Ride_End_Month) |
+!is.factor(Ride_End_Day) |
+!is.factor(birthyear)) %>% print(width=Inf)
+
+#Verify if there are any NA's in any of the columns, and also see how many are present to see their impact on analysis
+TidyDivvy_For_Analysis %>%
+  select(everything()) %>%  
+  summarise_all(funs(sum(is.na(.)))) %>% print(width=Inf)
+
+#purposely commented to prevent changes in result due to resaving the file
+#save(TidyDivvy_For_Analysis,file="Bkp\\TidyDivvy_For_Analysis.rda")
+```
+
+***
+***
+
+### STEP 13: DEEP DIVE ON DATA AND DATASET BOUNDARIES
+
+We are trying to understand the extremes of the data and dataset, by knowing highest, lowest, mean, median and count of a particular variables.
+
+***
+
+#### 1 > The number of rows in the original dataset : `r Divvy_Complete_count`
+
+```{r}
+rm(Divvy_Complete_count)
+```
+
+***
+
+#### 2 > Subset number of rows used for the sake of Analysis : `r count(TidyDivvy_For_Analysis)`
+
+***
+
+#### 3 > All the columns present in the dataset for analysis (Total: 32 columns)
+
+***
+
+```{r}
+colnames(TidyDivvy_For_Analysis)
+```
+
+***
+
+#### 4 > The years and months groups considered for analysis and respective count :
+
+This is helpful in knowing across how many months and years is our data distributed and how is it distributed
+
+***
+
+```{r}
+TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,Ride_Start_Month) %>% 
+                           summarise(ride_count=n()) %>% 
+                        arrange(Ride_Start_Year,Ride_Start_Month) %>% print(n=60)
+```
+
+***
+
+#### 5 > The mean, maximum, minimum, median and standard deviation of the amount of time that a bike has been rented for all the years (In minutes) :
+
+Being a core bike rental business, it is essential for us to understand how do the booking look like, what is the maximum, minumum, average time a bike is being rented. This will help us understand if users are really interested in our business. We see that on average our user books a ride between 17 to 22 minutes. A minimum time of 1 minutes that may suggest, user ended the booking in 1 minute as he might have had other last minute plans. The maximum time from 2015 to 2017 suggest it is almost close to 24 hours, but if we look at 2018 and 2019, the result is off the charts (over 138 days) that might suggest that user forgot to end a booking or a technical fault, unfortunately there is not sufficient data to conclude the reason for such outlier and influencer. The standard deviation for 2015,2016,2017 informs us that the deviation in booking is about 25 to 33 minutes above or below the mean, but if we looking at 2018 and 2019, those high values are being possibly caused by the influencer records.
+
+```{r}
+TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year) %>%  summarise(mean_rent_time=mean(tripduration),max_rent_time=max(tripduration),min_rent_time=min(tripduration),std_dev_rent_time=sd(tripduration),median_rent_time=median(tripduration)) %>% 
+  print(width=Inf)
+```
+
+
+In continuation to the above result tyring our best to know if the spike in max_rent_time was due to user error or system glitch and weather or not to include these results in the analysis. Assuming 24 hours as the maximum average booking from the trend seen in 2015,2016,2017. Let us see how many records exceed 24 hours in 2018 and 2019 and compare them to the total count of records in 2018 and 2019. We see that it is just 0.0004% of records the exceed 24 hours. Now this low percent for sure suggest something wrong going on in the system. So for the purpose of this analysis we are exlcuding these records to obtain accurate records. Ofcourse the  median,avg,max and standard deviation will change after removing the rows, all of the values will relative fall for 2018 and 2019 as compared to before. Considering these bookings to be a cause of system defect, we are removing these outlier to create better models.
+
+
+```{r}
+#Total count of bookings in 2018 2019
+TidyDivvy_For_Analysis %>% filter(Ride_Start_Year %in% c('2018','2019')) %>% group_by(Ride_Start_Year) %>% summarise(total_count=n())
+#Total count of bookings in 2018 2019 exceed 24 hours trip duration
+TidyDivvy_For_Analysis %>% filter(Ride_Start_Year %in% c('2018','2019')) %>% group_by(Ride_Start_Year) %>%  filter(tripduration>1440) %>% summarise(Bookings_greaterthan_24hrs=n())
+#Removing the outliers
+TidyDivvy_For_Analysis <-  TidyDivvy_For_Analysis %>% filter(tripduration<=1440)
+
+#Rechecking the results now
+TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year) %>%  summarise(mean_rent_time=mean(tripduration),max_rent_time=max(tripduration),min_rent_time=min(tripduration),std_dev_rent_time=sd(tripduration),median_rent_time=median(tripduration)) %>% 
+  print(width=Inf)
+```
+
+***
+
+#### 6 > Number of different bikes operated by Divvy Bikes over the past 5 years:
+
+Now that we got an understanding of our booking durations, we want to see how many bikes do we have in service to see if we need to increase or reduce the fleet size
+
+```{r}
+TidyDivvy_For_Analysis %>% summarise(n_distinct(bikeid))
+```
+
+***
+
+#### 7 > Average, maximum, minimum, median and standard deviation of age of people (In years) renting bikes:
+
+Here we are trying to understand the age of our customer renting bikes. We see that mean is about 38 with deviation being 10, so maximum focus should be between 28 and 48 years group range. The minimum age is a 3 year old. The maximum age is 121, which seems outlandish. 
+
+***
+
+```{r}
+TidyDivvy_For_Analysis %>%  
+  filter(!is.na(Age)) %>% 
+  summarise(Mean_Age=mean(Age),Max_Age=max(Age),Min_Age=min(Age),Median_Age=median(Age),Std_Dev_Age=sd(Age))
+```
+
+
+From the above result, let us inspect the maximum age that seems to be out of order. Let us see, how many of our customers are above the age of 100. We have about 269 records, that could be because of customers incorrectly providing their details.Though it cannot be confirmed for sure. Coming to the analysis  Since 269 is a much smaller number compared to 793625 records that possibily have the correct age, we can eliminate these records and still have rich amount data to perform analysis on. On again checking the results now, we see a change in median,mean,max and standard deviation in the new result. 
+
+
+```{r}
+#Count of user having age greater than 100 and grouped
+TidyDivvy_For_Analysis %>%  
+  filter(!is.na(Age)&Age>100) %>% 
+  group_by(Age) %>% summarise(n())
+#Count of user having age less than equal to 100
+TidyDivvy_For_Analysis %>%  
+  filter(!is.na(Age)&Age<=100) %>% summarise(n())
+#Removing the outliers
+TidyDivvy_For_Analysis <- TidyDivvy_For_Analysis %>% filter(is.na(Age)|Age<100)
+
+#Rechecking the results now
+TidyDivvy_For_Analysis %>%  
+  filter(!is.na(Age)) %>% 
+  summarise(Mean_Age=mean(Age),Max_Age=max(Age),Min_Age=min(Age),Median_Age=median(Age),Std_Dev_Age=sd(Age))
+```
+
+***
+
+#### 8 > Top and bottom 5 stations from where most and least bookings were made, along with their count across the 5 year span:
+
+The key takeaway from this analysis is to know where to strategically place more or less bikes based on the usage. Ofcourse we are going to have more bikes on stands on the Top 5 list and relatively reduces or close bike stands that not being properly utilized. One of the peculiar thing that we found was, more bikes were being rented at the Navy Pier,Lake Shore and Willis Tower locations likely indicating renting of bikes by liesure and tourist crowd.
+
+```{r}
+TidyDivvy_For_Analysis %>% count(from_station_name) %>%
+                          rename(Station_Name=from_station_name,Booking_count=n) %>% 
+                          arrange(desc(Booking_count)) %>% head(5) %>% 
+                          mutate(Category="Top 5")  %>% 
+                          union (TidyDivvy_For_Analysis %>% 
+                                   count(from_station_name) %>% 
+                                   rename(Station_Name=from_station_name,Booking_count=n) %>% 
+                                   arrange(Booking_count) %>% head(5) %>% 
+                                   mutate(Category="Bottom 5"))
+```
+
+***
+
+#### 9 > Top and bottom 5 destination stations to where most and least bookings were made, along with their count across the 5 year span:
+
+The key takeaway from this analysis is to know where to strategically place more or less bikes based on the usage. Ofcourse we are going to have more bikes on stands on the Top 5 list and relatively reduces or close bike stands that not being properly utilized.
+
+```{r}
+TidyDivvy_For_Analysis %>% count(to_station_name) %>%
+                          rename(Station_Name=to_station_name,Booking_count=n) %>% 
+                          arrange(desc(Booking_count)) %>% head(5) %>% 
+                          mutate(Category="Top 5")  %>% 
+                          union (TidyDivvy_For_Analysis %>% 
+                                   count(to_station_name) %>% 
+                                   rename(Station_Name=to_station_name,Booking_count=n) %>% 
+                                   arrange(Booking_count) %>% head(5) %>% 
+                                   mutate(Category="Bottom 5"))
+```
+
+***
+
+#### 10 > Lets figure out top 10 stations between which most people use Divvy bikes for
+
+Now that we know which are the most and least utilized station, let us now figure out where our crowd is heading from and to where are they going most. In short between which two stations are people most travelling. We see a lot of traffic between Lake Shore Dr & Monroe St and  Streeter Dr & Grand Ave. Also there is a lot of picks and drop within these streets. Other than that, in general, we see alot of activity on Lake Shore, Michigan and Streerter street. Definitely something interest going on these streets.
+
+```{r}
+TidyDivvy_For_Analysis %>% 
+                  group_by(from_station_name,to_station_name) %>% 
+                  count() %>% 
+                  arrange(desc(n)) %>% 
+                  head(10)
+```
+
+***
+
+#### 11 > Different membership types and their meaning, and the booking counts for each user type across years:
+
+**Note:**
+
+1.Customers: Renters 
+
+2.Subscribers: Membership Holders
+
+3.Dependent: Someone under 16 whose parent purchased them a membership
+
+We are trying to figure out how bookings vary by different type of users across various years. We see a trend of subscribers being the major part of our customer base, followed by customer and then dependent.
+
+```{r}
+TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,usertype) %>% summarise(count=n())
+```
+
+***
+
+#### 12 > Ratio of bookings made by subscribers (including dependents) to that of customers respectively:
+
+```{r}
+Temp_Ratio <- TidyDivvy_For_Analysis %>% 
+  mutate(Subscriber_Flag=if_else(usertype == "Subscriber" | usertype == "Dependent","Subscriber","Customer")) %>% 
+  group_by(Subscriber_Flag) %>%
+  summarise(Count = n()) %>% 
+  pivot_wider(names_from = Subscriber_Flag,values_from = Count) %>% 
+  summarise(Ratio=Subscriber/Customer) 
+```
+
+We see from the data of the past five years that Subscribers account to `r round(Temp_Ratio,1)` times bookings to that of Customer
+
+```{r}
+rm(Temp_Ratio) 
+```
+
+***
+
+#### 13 > Number of time a bike has been used repeatedly, to plan maintainance and service activites on the bikes
+
+We want to observe which bikes are being used more so that a maintainance can be planned on them before they breakdown
+
+```{r}
+TidyDivvy_For_Analysis %>% 
+                        count(bikeid) %>% 
+                        rename(Bike_Used_Count = n) %>% 
+                        arrange(desc(Bike_Used_Count))
+
+
+```
+
+***
+
+#### 14 > Day with the most and least booking and corresponding average temparature for the day, per each year:
+
+We see that the generally days with the most bookings is during july and august when the tempature is between 67F to 77F, on the contrast the least booking days were generally observed in winter mainly December,January and February when temparature are between -10 and 25. One interesting find is that, Christmas which is a public holiday where least bookings are not to be expected exist in the least booking list.
+
+```{r}
+TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,Ride_End_Month,Ride_End_Day) %>% 
+                            summarise(Booking_Count=n(),Avg_Temp=mean(Temp_Avg)) %>% 
+                            arrange(desc(Booking_Count)) %>% head(5) %>% 
+                            mutate(Day_Type="Most Booking") %>% 
+union(TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,Ride_End_Month,Ride_End_Day) %>% 
+                            summarise(Booking_Count=n(),Avg_Temp=mean(Temp_Avg)) %>% 
+                            arrange((Booking_Count)) %>% head(5) %>% 
+                            mutate(Day_Type="Least Booking"))
+```
+
+Resaving the Analysis files, as after our analysis we have determined and removed the outliers
+
+```{r}
+#purposely commented to prevent changes in results due to file resave
+#save(TidyDivvy_For_Analysis,file="Bkp\\TidyDivvy_For_Analysis_Final.rda")
+```
+
+
+***
+***
+
+### STEP 14: DATA VISUALIZATION
+
+We are trying to visualize data and understand the business.
+
+***
+
+#### 15 > The trend of bookings and business over the years
+
+From the chart it can be observed that there has been a sharp raise in the total number of bookings from 2015 to 2017, until a dip that happened in 2018, post which the bookings increased in 2019. 
+
+```{r}
+TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year) %>% 
+                          summarise(Total_bookings = n()) %>% 
+                          rename(Year=Ride_Start_Year) %>% 
+                          ggplot(aes(x=Year,y = Total_bookings)) + 
+                          geom_point(color="red")+
+                          geom_line(color="gray",group=1)+
+                          theme_classic()+
+                          theme(text = element_text(color = "lightseagreen"),strip.text=element_text( colour="navy")) 
+```
+
+***
+
+#### 16 > Trend of bookings across various months for different years in seperate graphs
+
+This graph was to illustrate which months of an year, since the past five years was our business busy. Divvy bikes being a predictable one it may seem obvious, but for data like sales data from Amazon, it is hard to guess a pattern. This graph was to help us practice and learn how to see patterns across months and years of any given data
+
+```{r}
+TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,Ride_Start_Month) %>% 
+                          summarise(Total_bookings = n()) %>% 
+                          rename(Month=Ride_Start_Month) %>% 
+                          ggplot() + 
+                          geom_bar(mapping = aes(x=Month,y = Total_bookings,fill=Month),stat = "identity",color="blueviolet")+
+                          # geom_text(mapping = aes(x=Month,y = Total_bookings,label=Total_bookings)) +
+                          geom_text(mapping = aes(x=Month,y = Total_bookings,label=Total_bookings),angle=45,size=3)+
+                          theme_classic()+
+                          theme(text = element_text(color = "lightseagreen"),strip.text=element_text( colour="navy"))+
+                          facet_wrap(~ Ride_Start_Year,nrow=5)
+  
+```
+
+***
+
+#### 17 > How does booking vary over different times of the day (Early Morning: 12am to 6am , Morning: 6am to 12pm, Afternoon: 12pm to 4pm, Evening: 4pm to 9pm, Night: 9pm to 12am). Which time of the day do we see more bookings overall
+
+**Note:** We observe the most bookings during the evenings. It is a bit of a surprise to see evening, we were expecting morning as bikes can help commute to work. It appears more people are interested in riding bike for leisure time rather than work.
+
+Per review, we have also inlcuded the new bar graph that seggrates monthwise count.
+
+```{r}
+TidyDivvy_For_Analysis %>% mutate(Hour_of_Day=as.numeric(format(start_time,"%H"))) %>% 
+                           mutate(Time_of_Day=if_else(Hour_of_Day<=6,"Early Morning",if_else(Hour_of_Day>6 & Hour_of_Day<12,"Morning",if_else(Hour_of_Day>=12&Hour_of_Day<16,"Afternoon",if_else(Hour_of_Day>=16&Hour_of_Day<21,"Evening",if_else(Hour_of_Day>=21,"Night","Unknown")))))) %>% 
+                          group_by(Time_of_Day) %>% 
+                          summarise(No_of_Bookings = n()) %>% 
+                          mutate(No_of_Bookings_Percent = No_of_Bookings/sum(No_of_Bookings)*100 ) %>% 
+                          ggplot(aes(x="",y=No_of_Bookings_Percent,fill=Time_of_Day)) +
+                          geom_bar(width = 1,stat = "identity",color="white") +
+                          coord_polar("y",start = 0) +
+                          geom_text(aes(label = paste(round(No_of_Bookings_Percent), "%")), 
+                                      position = position_stack(vjust = 0.5))+
+                          theme_classic()+
+                          theme(axis.text = element_blank(),axis.ticks = element_blank())
+
+TidyDivvy_For_Analysis %>% mutate(Hour_of_Day=as.numeric(format(start_time,"%H"))) %>% 
+                           mutate(Time_of_Day=if_else(Hour_of_Day<=6,"Early Morning",if_else(Hour_of_Day>6 & Hour_of_Day<12,"Morning",if_else(Hour_of_Day>=12&Hour_of_Day<16,"Afternoon",if_else(Hour_of_Day>=16&Hour_of_Day<21,"Evening",if_else(Hour_of_Day>=21,"Night","Unknown")))))) %>% 
+                          group_by(Ride_Start_Month,Time_of_Day) %>% 
+                          summarise(No_of_Bookings = n()) %>% 
+                          ggplot(aes(y=No_of_Bookings,x=Time_of_Day,fill=Time_of_Day)) +
+                          geom_bar(width = 1,stat = "identity",color="white",show.legend = F) +
+                          geom_text(aes(label = No_of_Bookings),angle=90,size=3)+
+                          scale_y_continuous(labels = scales::comma) +
+                          facet_wrap(~Ride_Start_Month)+
+                          theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+***
+
+#### 18 > To understand how customers are distributed across different genders, let us visualize the same using a graph.
+
+We see that overall we have more number of subscribers. The number of male user are more than twice as compared to female users.
+
+Per review, we also want to see a trend on how booking time varies. There is no suprise in here though, trip duration for male and female at various age groups remain equally distributed
+
+```{r}
+
+TidyDivvy_For_Analysis %>% filter(!is.na(gender)) %>% 
+                            group_by(usertype,gender) %>% 
+                            summarise(User_count=n()) %>% 
+                            ggplot(aes(x=gender,y=User_count,fill=usertype)) + 
+                            geom_bar(stat = "Identity")+
+                            scale_y_continuous(labels = scales::comma)
+
+
+TidyDivvy_For_Analysis %>% filter( !is.na(Age) & !is.na(gender)) %>% mutate(tripduration_Hours=tripduration/60) %>% select(gender,Age,tripduration_Hours) %>% ggplot() +
+                          geom_point(mapping = aes(x=Age,y=tripduration_Hours,color=gender))
+
+```
+
+***
+
+#### 19 > In a horizontal bar graph let us see if most people return bikes to the same location that they booked the ride from or they drop the bike at another station.
+
+Here we see that round trips are very rare, but that is not much of a surprise as it suggest that more people use bikes to commute from Point A to Point B in one trip, once their work at Point B is completed they make another booking to return to Point A. As that will save money instead of keeping the booking active all the way through the round trip. It also highlights one other thing that our bikes are reliably present for users to book later, User would generally not do this if they feel there won't be a bike with them on their return journey.
+
+```{r}
+TidyDivvy_For_Analysis %>% 
+  transmute(Drop_Location=if_else(from_station_id==to_station_id,"Same_Drop_Loc","Different_Drop_Loc")) %>%   
+  count(Drop_Location) %>% 
+  rename(count=n) %>% 
+  ggplot()+
+  geom_bar(mapping = aes(x="",fill=Drop_Location,y=count),stat = "identity")+
+  coord_flip()
+```
+
+***
+
+#### 20 > Through a graph let us see how the bookings vary over different age groups and genders
+
+We see that a majorly of trips between the age of 26 and 70 are made by males, almost twice or greater. While in the other ends of the spectrum it is more or less the same.
+
+As per review, we have also included the scatter plot of the same trend
+
+```{r}
+TidyDivvy_For_Analysis %>% 
+                    filter(!is.na(Age) & !is.na(gender))  %>%
+                    ggplot(aes(x= Age,fill=gender)) +
+                    geom_area(position = "identity",stat = "count")+ 
+                    scale_fill_manual(values = alpha(c("black","yellow"),0.75))+
+                    theme_light()
+
+TidyDivvy_For_Analysis %>% 
+                    filter(!is.na(Age) & !is.na(gender))  %>%
+                    group_by(gender,Age) %>% 
+                    summarise(count=n()) %>% 
+                    ggplot(aes(x= Age,y=count,color=gender)) +
+                    geom_point()
+```
+
+***
+
+#### 21 > Since we know males use Divvy bikes more compared to Females, let us see what percent of males are subscribers, dependents and customers. This is to understand who is our biggest customer. We are ignoring Dependents as we know they are very minute.
+
+From this we come to know that males subscribers are the biggest customer type among the rest in our business
+
+```{r}
+TidyDivvy_For_Analysis %>% filter(!is.na(gender) & gender=="Male" & usertype!='Dependent') %>% 
+                            group_by(usertype) %>% 
+                            summarise(User_count=n()) %>% 
+                            mutate(User_Percentage=User_count/sum(User_count)*100) %>% 
+                            ggplot(aes(x="",fill=usertype,y=User_Percentage)) + 
+                            geom_bar(stat = "identity")+
+                            geom_text(mapping = aes(label= paste(round(User_Percentage,2),"%")),position = position_stack(vjust = 0.5)) +
+                            theme_void()
+```
+
+***
+
+#### 22 > Through a graph lets us understand if the monthly average temperature, precipitation and snow plays any role in affecting the number of bookings for that month, across different years.
+
+**Note:** The temperature is in Fahrenheit The booking count has been scaled to 300 times less for aesthetics purpose.
+
+**Note:** We can observe that temperature is playing a role in bookings. From the graphs we can see that 75F is when we see a peak in bookings count
+
+```{r}
+TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,Ride_Start_Month) %>% 
+                          summarise(Avg_Temp=mean(Temp_Avg),Bookings_Count=n()) %>% 
+                          mutate(Ride_Start_Month=as.integer(Ride_Start_Month),Bookings_Count=Bookings_Count/300) %>% #To bring it to scale
+                          rename(Year=Ride_Start_Year, Month=Ride_Start_Month,`Booking:Scale(-300x)`=Bookings_Count) %>% 
+                          pivot_longer(c(Avg_Temp,`Booking:Scale(-300x)`),names_to="Attribute",values_to ="Temp") %>% 
+                          ggplot() +
+                          geom_smooth(aes(x=Month,y=Temp,color=Attribute))+
+                          scale_x_continuous(breaks = seq(1,12)) + 
+                          facet_wrap(~Year,nrow = 3)
+```
+
+***
+
+#### 23 > Similarly lets us understand if there is any relation between snow depth affecting the number of bookings for particular month, across different years.
+
+**Note:** The snow depth is in inches. The booking count has been scaled to 8000 times less for asthetics purpose. Snow depth has an opposite affect on bookings. As we see more snow depth, there is fall in bookings made.
+
+```{r}
+TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,Ride_Start_Month) %>% 
+                          summarise(Avg_Snow_depth=mean(Snow_depth),Bookings_Count=n()) %>% 
+                          mutate(Ride_Start_Month=as.integer(Ride_Start_Month),Bookings_Count=Bookings_Count/8000) %>% #To bring it to scale
+                          rename(Year=Ride_Start_Year, Month=Ride_Start_Month,`Booking:Scale(-8000x)`=Bookings_Count) %>% 
+                          pivot_longer(c(Avg_Snow_depth,`Booking:Scale(-8000x)`),names_to="Attribute",values_to ="Snow_depth") %>% 
+                          ggplot() +
+                          geom_line(aes(x=Month,y=Snow_depth,color=Attribute))+
+                          scale_x_continuous(breaks = seq(1,12)) + 
+                          facet_wrap(~Year,nrow = 3)
+```
+
+***
+***
+
+### STEP 15: DATA ANALYSIS AND MODELING
+We are trying to visualize data and understand the business.
+
+#### LOAD DATA
+
+Loading previously saved data
+
+```{r}
+load(file = "Bkp\\TidyDivvy_For_Analysis_Final.rda")
+```
+
+***
+***
+
+### DISCOVERY 
+
+After analyzing data for individual bookings, there is one common finding that we came across: 
+
+Individual bookings are certainly influenced by factors such as weather conditions, month of year, time of the day, Age, Gender and other factors. But the amount of variance explained by these factors is small. Pondering over it, the picture becomes much clearer, if we as individuals want to book a bike and go for a ride, things like temperature, gender, age are not really influencing rather much, though may be to a certain extent. What is more influential are personal characteristics and the environment an individual is surrounded by, like:
+
+1. I am feeling energetic today?
+2. How far is the nearest divvy bikes stand to my house?
+3. Are divvy bikes available near my house?
+4. Is there any event in downtown that I want to attend, but have parking problem with my car?
+5. Do I have an important event to attend and my car broke?
+
+so on.. 
+
+Added the fact that most people living in Chicago have vehicles and public transits, and considering bike riding as a leisure sport.
+
+This is a complete contrast of what was originally thought and hypothesized. When we first picked this dataset, we were in the notion that factors like weather, age of a person and other traits play a very significant role in how bookings are made. This becomes more apparent when we take a look at the below results that show that though the factors play an important role, there are other variables and data points missing in our dataset which are more significantly affecting trip duration and booking rate. 
+
+In the below analysis, we have run various correlation checks and linear as well as logistic models to see which variables are showing close relations.
+
+***
+***
+
+#### Different variables effect on number of bookings and its correlation 
+
+***
+
+```{r}
+#Correlation check on all possible numeric variables 
+TidyDivvy_For_Analysis %>% filter(!is.na(Age)) %>%  select(tripduration,Age,Temp_Avg,Precip,Snow_depth,Ride_Start_Time) %>% correlate( use = "pairwise.complete.obs", method = "pearson") %>%  shave()	%>%  rplot()	
+
+#Correlation check on all possible numeric variables when user is Subscriber
+TidyDivvy_For_Analysis %>% filter(!is.na(Age),usertype=="Subscriber") %>%  select(tripduration,Age,Temp_Avg,Precip,Snow_depth,Ride_Start_Time) %>% correlate( use = "pairwise.complete.obs", method = "pearson") %>%  shave()	%>%  rplot()
+
+#Correlation check on all possible numeric variables when user is Customer
+TidyDivvy_For_Analysis %>% filter(!is.na(Age),usertype=="Customer") %>%  select(tripduration,Age,Temp_Avg,Precip,Snow_depth,Ride_Start_Time) %>% correlate( use = "pairwise.complete.obs", method = "pearson") %>%  shave()	%>%  rplot()	
+
+#Correlation check to include number of bookings per day as well as all other numeric variables 
+TidyDivvy_For_Analysis %>% group_by(as.Date(start_time),Age) %>% summarise(tripduration=mean(tripduration),Temp_Avg=mean(Temp_Avg),Precip=mean(Precip),Snow_depth=mean(Snow_depth),Ride_Start_Time=mean(Ride_Start_Time),booking_count=n()) %>% ungroup() %>% select(-`as.Date(start_time)`) %>% correlate( use = "pairwise.complete.obs", method = "pearson") %>%  shave()	%>%  rplot()
+
+#Correlation check to include number of bookings per day as well as all other numeric variables for Customer type users
+TidyDivvy_For_Analysis %>% filter(usertype=="Customer") %>%  group_by(as.Date(start_time),Age) %>% summarise(tripduration=mean(tripduration),Temp_Avg=mean(Temp_Avg),Precip=mean(Precip),Snow_depth=mean(Snow_depth),Ride_Start_Time=mean(Ride_Start_Time),booking_count=n()) %>% ungroup() %>% select(-`as.Date(start_time)`) %>% correlate( use = "pairwise.complete.obs", method = "pearson") %>%  shave()	%>%  rplot()
+
+#Correlation check to include number of bookings per day as well as all other numeric variables for Subscriber type   users
+TidyDivvy_For_Analysis %>% filter(usertype=="Subscriber") %>% group_by(as.Date(start_time),Age) %>% summarise(tripduration=mean(tripduration),Temp_Avg=mean(Temp_Avg),Precip=mean(Precip),Snow_depth=mean(Snow_depth),Ride_Start_Time=mean(Ride_Start_Time),booking_count=n()) %>% ungroup() %>% select(-`as.Date(start_time)`) %>% correlate( use = "pairwise.complete.obs", method = "pearson") %>%  shave()	%>%  rplot()
+```
+
+***
+***
+
+#### Different variables effect on trip duration
+
+***
+
+```{r}
+#DATA WRANGLE
+TidyDivvy_For_Analysis1 <-TidyDivvy_For_Analysis %>% filter(!is.na(Age)) %>% mutate(weekend=ifelse(weekdays(as.Date(start_time)) %in% c("Saturday","Sunday"),"Yes","No")) #code added to included effect of weekend
+
+#SAMPLE SPLIT
+set.seed(9999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#SET FORMULAS
+model_1 <- tripduration ~ Temp_Avg*usertype 
+model_2 <- tripduration ~ Temp_Avg + Precip + Snow_depth + Age + gender + usertype
+model_3 <- tripduration ~ Temp_Avg + Precip + Snow_depth + Age + gender + Ride_Start_Time + Ride_Start_Year + Ride_Start_Month + Ride_Start_Day+ weekend
+model_4 <- tripduration ~ Temp_Avg*gender*Ride_Start_Month
+model_5 <- tripduration ~ usertype*weekend*Ride_Start_Month
+
+
+#MODEL
+model1 <- lm(formula = model_1, data = train)
+model2 <- lm(formula = model_2, data = train)
+model3 <- lm(formula = model_3, data = train)
+model4 <- lm(formula = model_4, data = train)
+model5 <- lm(formula = model_5, data = train)
+
+#SUMMARY
+rsquare(model1, data = train)
+tidy(model1)
+rsquare(model2, data = train)
+tidy(model2)
+rsquare(model3, data = train)
+tidy(model3)
+rsquare(model4, data = train)
+tidy(model4)
+rsquare(model5, data = train)
+tidy(model5)
+
+```
+
+***
+***
+
+#### Different variables effect on trip duration when user type is Subscriber
+
+***
+
+```{r}
+#DATA WRANGLE
+TidyDivvy_For_Analysis1 <-TidyDivvy_For_Analysis %>% filter(usertype=="Subscriber",!is.na(Age)) %>% mutate(weekend=ifelse(weekdays(as.Date(start_time)) %in% c("Saturday","Sunday"),"Yes","No")) #code added to include the effect of weekend
+
+#SAMPLE SPLIT
+set.seed(9999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#CHECK DATA AND SET FORMULA
+model_1 <- tripduration ~ Temp_Avg + Precip + Snow_depth 
+model_2 <- tripduration ~ Temp_Avg + Precip + Snow_depth + Age + gender
+model_3 <- tripduration ~ Temp_Avg + Precip + Snow_depth + Age + gender + Ride_Start_Time + Ride_Start_Year + Ride_Start_Month + Ride_Start_Day + weekend
+model_4 <- tripduration ~ Temp_Avg*gender*Ride_Start_Month
+model_5 <- tripduration ~ Temp_Avg*gender*Ride_Start_Month*Age
+
+
+#MODEL
+model1 <- lm(formula = model_1, data = train)
+model2 <- lm(formula = model_2, data = train)
+model3 <- lm(formula = model_3, data = train)
+model4 <- lm(formula = model_4, data = train)
+model5 <- lm(formula = model_5, data = train)
+
+#SUMMARY
+rsquare(model1, data = train)
+tidy(model1)
+rsquare(model2, data = train)
+tidy(model2)
+rsquare(model3, data = train)
+tidy(model3)
+rsquare(model4, data = train)
+tidy(model4)
+rsquare(model5, data = train)
+tidy(model5)
+```
+
+***
+***
+
+#### Different variables effect on trip duration when user type is Customer
+
+***
+
+```{r}
+#DATA WRANGLE
+TidyDivvy_For_Analysis1 <-TidyDivvy_For_Analysis %>% filter(usertype=="Customer",!is.na(Age)) %>% mutate(weekend=ifelse(weekdays(as.Date(start_time)) %in% c("Saturday","Sunday"),"Yes","No")) #code added to include the effect of weekend
+
+#SAMPLE SPLIT
+set.seed(9999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#SET FORMULA
+model_1 <- tripduration ~ Temp_Avg + Precip + Snow_depth 
+model_2 <- tripduration ~ Temp_Avg + Precip + Snow_depth + Age + gender
+model_3 <- tripduration ~ Temp_Avg + Precip + Snow_depth + Age + gender + Ride_Start_Time + Ride_Start_Year + Ride_Start_Month + Ride_Start_Day + weekend
+model_4 <- tripduration ~ Temp_Avg*gender*Ride_Start_Month
+model_5 <- tripduration ~ Temp_Avg*gender*Ride_Start_Month*Age
+
+#MODEL
+model1 <- lm(formula = model_1, data = train)
+model2 <- lm(formula = model_2, data = train)
+model3 <- lm(formula = model_3, data = train)
+model4 <- lm(formula = model_4, data = train)
+model5 <- lm(formula = model_5, data = train)
+
+#SUMMARY
+rsquare(model1, data = train)
+tidy(model1)
+rsquare(model2, data = train)
+tidy(model2)
+rsquare(model3, data = train)
+tidy(model3)
+rsquare(model4, data = train)
+tidy(model4)
+rsquare(model5, data = train)
+tidy(model5)
+```
+
+***
+***
+
+#### Different independent variables effect on prediction of User type
+
+***
+
+```{r}
+#WRANGLE DATA
+TidyDivvy_For_Analysis1 <-  TidyDivvy_For_Analysis %>% filter(!is.na(Age),usertype!="Dependent") %>% mutate(Is_subscriber=ifelse(usertype=="Subscriber",1,0),weekend=ifelse(weekdays(as.Date(start_time)) %in% c("Saturday","Sunday"),"Yes","No")) #code added to include the effect of weekend
+
+#SET FORMULA
+model_1 <- Is_subscriber ~ tripduration  + gender + Age + weekend
+  
+#SAMPLE SPLIT
+set.seed(9999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#RUN MODEL
+model1 <- glm(formula = model_1, family = "binomial", data = train)
+
+#SUMMARY
+list(model1 = pscl::pR2(model1)["McFadden"])
+summary(model1)
+```
+
+***
+***
+
+### EXTRACTION OF POSSIBLE INSIGHTS
+
+From the above results it can be noticed that though many factors are significant in predicting the output, the amount of variance explained by them in quite low. So, having a level of analysis at individual booking it becoming a challenge, as most of our data point are not able to explain good amount of variance.
+
+For us, we feel this to be a real-world scenario where data collected by companies may not produce sufficient result in prediction. That being said, we did not want the data collected by the company to be wasted and wanted to scavenge what was possible.
+
+We have worked around the problem, by group bookings by the day and other aggregations levels, to see if there is a bigger picture hidden in the data. This eagle eye view helps us better understand what consensus the data can offer with a good prediction and how can it be useful to the company in designing its marketing and other strategies.
+
+A point to note here is that, keeping  the valuable reader's time value in mind, we have skipped presentation of analysis that explain low variance in the response variable even though they have extremely low P-value. Nevertheless, surprising results are still reported in the report. Below are some of the analysis that we performed and reported the best models based on comparing the results in an excel sheet. As well, a quick point to add here is, since we are now dealing with an aggregated data level analysis, current desktops and laptops are able to run them using native R without requiring the use of spark.
+
+***
+
+![Various Models Ran](Pre-testing.png)
+
+***
+***
+
+### ANALYSIS 1.1
+
+#### Predict average trip duration per day, given average temperature of the day and interaction affect between mean temperature and if the day is weekday or weekend
+
+**Note:**
+For creating the model we are using only those days that have greater than 100 bookings to improve accuracy. Let's say if we have less than 100 bookings, and there are some influential bookings in it that are drastically increasing or decreasing the mean trip duration, the model will become in-accurate. This model prediction works only when the temperature is above 30 degrees. The reason is that, under 30 degrees the relationship between trip duration and temperature is not linear, and modeling including those temperatures cause a lot of error in prediction when temperature falls below 30. So, this model is only accurate to predict mean trip duration when temperatures are above 30.
+
+**Overview for Data Scientist: **
+
+Temperature, and the interaction affect between temperature and knowing if the day is weekday or weekend explains 66% of variance that is occurring for the mean trip duration per day. From the result following can be concluded:
+
+1. The P-value for the model and independent variables is less than 0.5 and F-Statistic is 859.1, indicating they are very good predictors and model it-self is significant
+
+2. The residual error on the response variable is 2.9 minutes
+
+3. From the co-efficient we can say that, there is a positive correlation between temperature for the day and mean trip duration. It says that for every 1 degree raise in temperature, the mean trip duration for the bookings on that day raise by 0.16 * 60 = 9.6 seconds. Also knowing that it is a weekend or not also has a positive correlation. It states, for a given temperature, the average trip duration for the bookings on weekend is .10 * 60 = 6 seconds more. The intercept can not be interpreted, as 0 degrees is not a practical case.
+
+4. From the confidence interval we can say that one unit increase in temperature causes between .14 to .17 times increase in mean trip duration in minutes. Also given weekend, a unit increase in temperature causes between 0.09 to 0.1 times increase in mean trip duration
+
+5. Plotting the graph between predictor and response variable we can see that relationship between them is linear
+
+6. Looking at the Residual vs Fitted, Scale-Location are looking good with even distribution of residuals. The Q-Q plot looks good for the most part except towards the end, which shows slight deviation from residual being normal. The Residual vs Leverage shows that there are couple of outliers
+
+7. From checking the collinearity, we can see that it is close to 1 showing very less collinearity
+
+8. The MSE value for Test is 8.17 compared to 8.42 on the Train sample set, that shows the model is doing a good job.
+
+**Overview for Business: **
+
+With every degree increase in temperature we see a raise in mean trip duration, by this we can say that having Divvy bikes expand to warmer regions like California or Arizona can be beneficial, though other considerations have to be kept in mind, such as moving to areas with extreme hot climates will again drop the average trip duration. Also, we see an overall increase in trip duration during the weekends. So. having marketing plans such as Bikers Weekend etc.  that focus on engaging more users to ride bikes on weekends is beneficial for increasing business revenue. It is also to be noted, the variance explained is 66% which shows that there are other factors currently unavailable in the data that influence mean trip duration that need to be considered.
+
+**MODEL**
+
+```{r}
+#DATA WRANGLE
+TidyDivvy_For_Analysis1 <-TidyDivvy_For_Analysis %>% mutate(weekend=ifelse(weekdays(as.Date(start_time)) %in% c("Saturday","Sunday"),1,0)) %>% group_by(Ride_Start_Year,Ride_Start_Month,Ride_Start_Day,weekend) %>% summarise(mean_tripduration=mean(tripduration),mean_temp=mean(Temp_Avg),no_of_bookings=n()) %>% ungroup() %>% filter(no_of_bookings > 100 & mean_temp>30)
+
+#CHECK DATA AND SET FORMULA
+TidyDivvy_For_Analysis1 %>% head(3) 
+model_for <- mean_tripduration ~ mean_temp + mean_temp:weekend  
+
+#SAMPLE SPLIT
+set.seed(9999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#MODEL
+model1 <- lm(formula = model_for, data = train)
+
+#SUMMARY 
+summary(model1)
+list(model1 = broom::glance(model1))
+sigma(model1)/mean(train$mean_tripduration)
+confint(model1)
+
+#RSE CHECK
+ggplot(train, aes(mean_temp + mean_temp:weekend , mean_tripduration)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_smooth(se = FALSE, color = "red")
+
+#ALL ASSUMPTIONS - PLOT
+par(mfrow=c(2, 2))
+plot(model1)
+par(mfrow=c(1, 1))
+
+#COLLINEARITY CHECK
+car::vif(model1)
+
+#MSE CHECK
+ test %>% 
+  add_predictions(model1) %>%
+  summarise(Test_MSE = mean((mean_tripduration - pred)^2))
+
+train %>% 
+  add_predictions(model1) %>%
+  summarise(Train_MSE = mean((mean_tripduration - pred)^2))
+
+#PREDICT
+test %>% add_predictions(model1)
+```
+
+***
+***
+
+### ANALYSIS 1.2
+
+#### Predict average bookings per month given the average temperature for that month
+
+**Note**
+
+This model prediction works only when the temperature is between 25 and 80 degrees, as that is the range between which the graph is linear. In order to make sure we are preserving good volume of data for analysis, we found that over 90% of booking data we have are between 25 and 80 degrees.
+
+**Overview for Data Scientist:** 
+
+Average monthly Temperature explains 93% variance in the total number of bookings for a particular month
+
+1. The P-value for the model and independent variable is less than 0.5 and F-Statistic is 449.3, indicating average temperature as a very good predictor and model it-self is significant
+
+2. The residual error on the response variable is 2550 booking count
+
+3. From the co-efficient we can say that, there is a positive correlation between average temperature and booking count for that month. It says that for every 1 degree raise in average temperature, the average booking count for the month raise by 520. Again, the intercept can not be interpreted, because 0 degrees is not practical.
+
+4. From the confidence interval we can say that one unit increase in temperature causes between 470 to 570 times increase in booking count.
+
+5. Plotting the graph between predictor and response variable we can see that relationship between them is linear with a slight curve
+
+6. Q-Q plot and Scale-Location are looking good with even distribution of residuals. The Residual vs Fitted plot looks good without funneling. The Residual vs Leverage shows that there are couple of outliers
+
+7. The MSE percentage value for Test is 11% compared to 15% on the Train sample set, that shows the model is doing a good job.
+
+
+**Overview for Business: **
+
+With every degree increase in average temperature we see a raise in average bookings per month, this is only true when temperatures are between 20 and 80 degrees. By this we can say that, having Divvy bikes expand to warmer regions can be beneficial, though other considerations have to be kept in mind, such as moving to areas with extreme hot climates will again drop the number of bookings.
+
+**MODEL**
+
+```{r}
+#DATA WRANGLE
+TidyDivvy_For_Analysis1 <-TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,Ride_Start_Month) %>% summarise(mean_temp=mean(Temp_Avg),no_of_bookings=n()) %>% ungroup() %>% filter(between(mean_temp,20,80))
+
+#CHECK DATA AND SET FORMULA
+TidyDivvy_For_Analysis1 %>% head(3)
+model_for <- no_of_bookings ~ mean_temp
+
+#SAMPLE SPLIT
+set.seed(999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#MODEL
+model1 <- lm(formula = model_for, data = train)
+
+#SUMMARY 
+summary(model1)
+list(model1 = broom::glance(model1))
+sigma(model1)/mean(train$no_of_bookings)
+confint(model1)
+
+#RSE CHECK
+ggplot(train, aes(mean_temp, no_of_bookings)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_smooth(se = FALSE, color = "red")
+
+#ALL ASSUMPTIONS - PLOT
+par(mfrow=c(2, 2))
+plot(model1)
+par(mfrow=c(1, 1))
+
+#MSE CHECK
+ test %>% 
+  add_predictions(model1) %>%
+  summarise(Test_MSE = mean((no_of_bookings - pred)^2),MSE_Perc=sqrt(Test_MSE)/mean(no_of_bookings))# test MSE
+
+train %>% 
+  add_predictions(model1) %>%
+  summarise(Train_MSE = mean((no_of_bookings - pred)^2),MSE_Perc=sqrt(Train_MSE)/mean(no_of_bookings))# training MSE
+
+#PREDICT
+test %>% add_predictions(model1)
+```
+
+***
+
+**Note:**
+
+Since the graph between number of bookings per month and mean temperature is curved and not very linear, to improve the accuracy we have used log transformation.
+
+It can be observed that now we have a more linear curve and a better Residual vs Fitted graph as compared to the previous result. Also, we were able to reduce the Test MSE error percentage by doing the transformation.
+
+***
+
+**TRANSFORMED MODEL**
+
+***
+
+```{r}
+#DATA WRANGLE
+TidyDivvy_For_Analysis1 <-TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,Ride_Start_Month) %>% summarise(mean_temp=mean(Temp_Avg),no_of_bookings=n()) %>% ungroup() %>% filter(between(mean_temp,20,80))
+
+#CHECK DATA AND SET FORMULA
+TidyDivvy_For_Analysis1 %>% head(3)
+model_for <- log(no_of_bookings) ~ mean_temp
+
+#SAMPLE SPLIT
+set.seed(999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#MODEL
+model1 <- lm(formula = model_for, data = train)
+
+#SUMMARY 
+summary(model1)
+list(model1 = broom::glance(model1))
+sigma(model1)/mean(train$no_of_bookings) 
+confint(model1)
+
+#*VARIABLES* Residual standard error (RSE)
+ggplot(train, aes(mean_temp, log(no_of_bookings))) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_smooth(se = FALSE, color = "red")
+
+#ALL ASSUMPTIONS - PLOT
+par(mfrow=c(2, 2))
+plot(model1)
+par(mfrow=c(1, 1))
+
+#MSE CHECK
+#Note: Since we are doing a log transformation, we have to perform an exponential to unwrap the logged result
+test %>% 
+  add_predictions(model1) %>% mutate(pred =exp(pred))  %>% 
+  summarise(Test_MSE = mean((no_of_bookings - pred)^2),Act_Dev=sqrt(Test_MSE),mean_response=mean(no_of_bookings),MSE_Perc=Act_Dev/mean_response)# test MSE
+
+train %>% 
+  add_predictions(model1) %>% mutate(pred =exp(pred))  %>% 
+  summarise(Train_MSE = mean((no_of_bookings - pred)^2),Act_Dev=sqrt(Train_MSE),mean_response=mean(no_of_bookings),MSE_Perc=Act_Dev/mean_response)# training MSE
+
+#PREDICT
+#Note: Since we are doing a log transformation, we have to perform an exponential to unwrap the logged result
+test %>% add_predictions(model1) %>% mutate(pred =exp(pred))
+```
+
+
+***
+***
+
+### ANALYSIS 1.3
+
+#### Predict average bookings per day given the average temperature, snow depth and rain for that day
+
+**Overview for Data Scientist** 
+
+Average Temperature, rain and snow depth explains 80% variance in average bookings per day
+
+1. The P-value for the model and independent variables are less than 0.5 and F-Statistic is 1544, indicating average temperature, snow depth and rain as a good predictor and model it-self is significant
+
+2. The residual error on the response variable is 146 booking count
+
+3. From the co-efficient we can say that, there is a positive correlation between average temperature and number of bookings for that day. It says, for every 1 degree raise in average temperature, an average increase of 15 bookings is observed. A strange discovery shows a positive correlation with snow depth, it informs that every 1 inch raise in snow depth is increasing the booking count by 10. Coming to rain effect, it is as expected, mean rain in inches has a negative correlation, that shows that one inch of rain causes the booking count to fall by 229 times for that day.
+
+4. Looking at the confidence interval we can see the range between the co-efficient that explain the amount of variation in number of bookings
+
+5. Plotting the graph between predictor and response variable we can see that relationship is not linear, suggesting a transformation
+
+6. Q-Q plot and Scale-Location are looking good with even distribution of residuals. The Residual vs Fitted plot shows funneling effect, highlighting the issue with residuals. The Residual vs Leverage shows that there are couple of outliers
+
+7. The MSE percentage value for Test is 26.8% compared to 26.1% on the Train sample set, that shows the model is not very impressive.
+
+Though the variance explained and P-value show that the model is doing a good job, it is breaking the residual assumptions and following non-linear curve, as well having a high MSE error rate. So, we shall be doing a polynomial transformation.
+
+**Overview for Business:**
+
+There are variables outside the available data, that are influencing the number of bookings per day, our model though to certain extent is able to explain the variation, is not doing justification to the outcome. We will need to include other elements to significantly make a prediction.
+
+Though the model was insignificant, a key takeaway here is that snow depth has a positive correlation, meaning that as snow depth increases the number of bookings are increasing, which is an interest finding. Possible explanation, during the winter times there is more traffic on road due to snow accumulation and also people are having hard time finding parking spots on roadside due to heavy snow. So, people travelling short distances may be using bikes more often in snow.
+
+**MODEL**
+
+```{r}
+#WRANGLE DATA
+TidyDivvy_For_Analysis1 <-TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,Ride_Start_Month,Ride_Start_Day)  %>%  summarise(mean_temp=mean(Temp_Avg),no_of_bookings=n(),mean_rain=mean(Precip),mean_snow=mean(Snow_depth)) %>% ungroup() 
+
+#CHECK DATA AND SET FORMULA
+TidyDivvy_For_Analysis1 %>% head(3)
+model_for <- no_of_bookings ~ mean_temp +  mean_rain + mean_snow
+
+#SAMPLE SPLIT
+set.seed(9999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#MODEL
+model1 <- lm(formula = model_for, data = train)
+
+#SUMMARY 
+summary(model1)
+list(model1 = broom::glance(model1))
+sigma(model1)/mean(train$no_of_bookings)
+confint(model1)
+
+#RSE CHECK
+ggplot(train, aes(mean_temp +  mean_rain + mean_snow  , no_of_bookings)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_smooth(se = FALSE, color = "red")
+
+#ASSUMPTIONS CHECK - PLOT
+par(mfrow=c(2, 2))
+plot(model1)
+par(mfrow=c(1, 1))
+
+#COLLINEARITY CHECK
+car::vif(model1)
+
+#MSE CHECK
+ test %>% 
+  add_predictions(model1) %>%
+  summarise(Test_MSE = mean((no_of_bookings - pred)^2),Act_Dev=sqrt(Test_MSE),mean_response=mean(no_of_bookings),MSE_Perc=Act_Dev/mean_response)# test MSE
+
+train %>% 
+  add_predictions(model1) %>%
+  summarise(Train_MSE = mean((no_of_bookings - pred)^2),Act_Dev=sqrt(Train_MSE),mean_response=mean(no_of_bookings),MSE_Perc=Act_Dev/mean_response)# training MSE
+
+#PREDICT
+ test %>% add_predictions(model1) 
+```
+
+***
+
+**Note:**
+
+Since there is an issue with residuals having a funneling affect and non-linearity of the model. We are applying a polynomial transformation.
+
+On inspecting the results, though the graph has turned to be better, the overall improvement is still not significant. We can say that by looking at the MSE percentage values which are still relatively high. There seems to be a lack of an important predictor variable that better explains the deviations.
+
+***
+
+**TRANSFORMED MODEL**
+
+***
+
+```{r}
+#WRANGLE DATA
+TidyDivvy_For_Analysis1 <-TidyDivvy_For_Analysis %>% group_by(Ride_Start_Year,Ride_Start_Month,Ride_Start_Day)  %>%  summarise(mean_temp=mean(Temp_Avg),no_of_bookings=n(),mean_rain=mean(Precip),mean_snow=mean(Snow_depth)) %>% ungroup() 
+
+
+#CHECK DATA AND SET FORMULA
+TidyDivvy_For_Analysis1 %>% head(3)
+model_for <- no_of_bookings ~ mean_temp + I(mean_temp^2) +  mean_rain + I(mean_rain^2) #+ mean_snow + I(mean_snow^2) 
+# snow depth has been commented on purpose as it has become a non-significant predictor after applying polynomial transformation
+
+#SAMPLE SPLIT
+set.seed(9999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#MODEL
+model1 <- lm(formula = model_for, data = train)
+
+#SUMMARY 
+summary(model1)
+list(model1 = broom::glance(model1))
+sigma(model1)/mean(train$no_of_bookings)
+confint(model1)
+
+#RSE
+ggplot(train, aes(mean_temp+mean_rain, no_of_bookings)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x + I(x^2))
+
+#ASSUMPTIONS CHECK - PLOT
+par(mfrow=c(2, 2))
+plot(model1)
+par(mfrow=c(1, 1))
+
+#COLLINEARITY CHECK
+car::vif(model1)
+
+
+#MSE CHECK
+#Note: Since we are doing a log transformation, we have to perform an exponential to unwrap the logged result
+ test %>% 
+  add_predictions(model1) %>% mutate(pred =(pred))  %>% 
+  summarise(Test_MSE = mean((no_of_bookings - pred)^2),Act_Dev=sqrt(Test_MSE),mean_response=mean(no_of_bookings),MSE_Perc=Act_Dev/mean_response)# test MSE
+
+train %>% 
+  add_predictions(model1) %>% mutate(pred =(pred))  %>% 
+  summarise(Train_MSE = mean((no_of_bookings - pred)^2),Act_Dev=sqrt(Train_MSE),mean_response=mean(no_of_bookings),MSE_Perc=Act_Dev/mean_response)# training MSE
+
+#PREDICTION
+#Note: Since we are doing a log transformation, we have to perform an exponential to unwrap the logged result
+ test %>% add_predictions(model1) 
+```
+
+***
+***
+
+### ANALYSIS 2.1
+
+#### Predicting if user type group is Subscriber or Customer based upon average trip duration and number of bookings on a particular day
+
+**Overview for Data Scientist:**
+
+Given average trip duration per day and the count of number of bookings of each group, we can predict the User type group (Subscriber or Customer group) for that day with a variance of 85%.
+
+1. The P-value for the model and independent variable is less than 0.5 and residual deviation between null and our model is very large, indicating average trip duration and count as a very good predictor of which user type group it could be,  and model it-self is significant
+
+2. Subscriber are denoted by 1, also dependents are considered subscriber as essentially, they are under-aged subscribers
+
+3. Looking at the co-efficient, average trip duration has a negative correlation with Subscriber and count has a positive correlation. Which means subscribers have an average trip duration of 0.64 times less minutes than customers, but the number of bookings per day of subscribers is 206 times more than customers.
+
+4. The confidence interval provides the co-efficient range between which the estimates lie
+
+5. From the variable importance function, we see that both predictor variables are equally important in prediction, with a slight edge for average trip duration being the better one
+
+6. There is no collinearity among the predictors
+
+7. There are couple of residual and outliers that are beyond the threshold
+
+8. The percentage of error from this model is 2% on running it with test data set
+
+9. From the confusion matrix and running the prediction on test, we see that our model has a precision of 98% and accuracy of 96%
+
+10. The ROC curve and AUC value of 0.99 shows that the model is doing a great job.
+
+Overall, we can conclude that this is a very significant model.
+
+**Overview for Business**
+
+Let us say given daily average trip duration and number of bookings by a certain user group, we are able to determine which type of users are they, either subscribers or customers.
+
+If we flip the coin on the other side, we can also see that a customers in general rides for longer duration compared to subscribers, but on the other hand we have more number of bookings being made per day by subscribers. Marketing programs designed to target customer user group to bring more bookings will boost the company's financial growth, as they are the ones who book bikes for a longer duration.
+
+**MODEL**
+
+```{r}
+#WRANGLE DATA
+TidyDivvy_For_Analysis1 <- TidyDivvy_For_Analysis %>% mutate(Is_Subscriber = ifelse(usertype=="Customer",0,1)) %>% group_by(Ride_Start_Year,Ride_Start_Month,Ride_End_Day,Is_Subscriber) %>% summarise(mean_tripduration=mean(tripduration),count=n(),mean_ride_start_time=mean(Ride_Start_Time)) %>% ungroup()
+
+#CHECK DATA AND SET FORMULA
+TidyDivvy_For_Analysis1 %>% head(3)
+model_for <- Is_Subscriber ~ mean_tripduration + count
+  
+#GRAPH
+ TidyDivvy_For_Analysis1 %>%  ggplot(aes(mean_tripduration + count, Is_Subscriber)) +
+  geom_point(alpha = .15) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+  ggtitle("Logistic regression model fit") +
+  xlab("mean_tripduration + count") +
+  ylab("Probability of Subscriber")
+
+#SAMPLE SPLIT
+set.seed(9999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#RUN MODEL
+model1 <- glm(formula = model_for, family = "binomial", data = train)
+
+#SUMMARY
+summary(model1)
+list(model1 = pscl::pR2(model1)["McFadden"])
+exp(coef(model1))
+confint(model1)
+
+#Importance of Predictors
+caret::varImp(model1)
+
+#COLLINIEARITY
+car::vif(model1)
+
+
+#Residual Assessment - OUTLIER CHECK
+model1_data <- augment(model1) %>% 
+  mutate(index = 1:n())
+ggplot(model1_data, aes(index, .std.resid, color = Is_Subscriber)) + 
+  geom_point(alpha = .5) +
+  geom_ref_line(h = 3)
+ 
+ model1_data %>% 
+  filter(abs(.std.resid) > 3)
+  
+
+#Cooks Distance
+ plot(model1, which = 4, id.n = 5)
+  model1_data %>%   top_n(5, .cooksd)
+  
+
+#MISSCLASSIFICATION ERROR
+test.predicted.m1 <- predict(model1, newdata = test, type = "response")
+list(  model1 = table(test$Is_Subscriber, test.predicted.m1 > 0.5) %>% prop.table() %>% round(3))
+
+test %>%
+  mutate(m1.pred = ifelse(test.predicted.m1 > 0.5, 1, 0)) %>%
+  summarise(m1.error = mean(Is_Subscriber != m1.pred)) 
+
+#SENSITIVITY AND SPECIFICITY
+(confusion_matrix <- table(test$Is_Subscriber, test.predicted.m1 > 0.5))
+(sensitivity_precision  <-  as.numeric(confusion_matrix[2,2])/(as.numeric(confusion_matrix[2,1]+as.numeric(confusion_matrix[2,2]))))
+(specificity_accuracy  <-  as.numeric(confusion_matrix[1,1])/(as.numeric(confusion_matrix[1,1]+as.numeric(confusion_matrix[1,2]))))
+
+#ROC AND AUC CURVE
+prediction(test.predicted.m1, test$Is_Subscriber) %>%
+  performance(measure = "tpr", x.measure = "fpr") %>%
+  plot()
+
+prediction(test.predicted.m1, test$Is_Subscriber) %>%
+  performance(measure = "auc") %>%
+  .@y.values
+
+```
+
+
+***
+***
+
+### ANALYSIS 2.2
+
+#### Predicting if the day is public holiday or not based upon average trip duration and count of bookings made that day.
+
+**Overview for Data Scientist:**
+
+Given average trip duration per day and the count of number of bookings on that day we can determine if it was a holiday or not with variance of 40%.
+
+1. The P-value for the model and independent variable is less than 0.5 and residual deviation between null and our model is very large, indicating average trip duration and count as a good predictor of public holiday,  and model it-self is significant
+
+2. The public holiday is denoted by 1
+
+3. Looking at the co-efficient, average trip duration has a positive correlation with holiday and count has a negative correlation. As trip duration increase by 1 minute, the odd of the day being a holiday are increasing by 1.7 times, but as number of bookings per day increase by 1 count, the chances of it being a holiday fall by 0.99 times. For better understanding, it can also be interpreted as holidays having an average trip duration of 1.7 times more minutes than normal days, but the number of bookings per day on holiday is 0.99 times less which is an interesting discovery.
+
+4. The confidence interval provides the co-efficient range between which the estimates lie
+
+5. From the variable importance function, we see that both predictor variables are equally important in prediction
+
+6. There seems to be a bit of collinearity among the variables but within the threshold
+
+7. There are couple of residual and outliers that are beyond the threshold
+
+8. The percentage of error from running model on test data is 17.7%
+
+8. From the confusion matrix and running the prediction on test, we see that our model has a precision of 64% and accuracy of 92%
+
+9. The ROC curve and AUC value of 0.9 shows that the model is doing a good job.
+
+Overall, there seems to be a bit of problem with precision, nevertheless in applications related to accuracy the model is doing a good job.
+
+**Overview for Business**
+
+We are able to see that trip duration and count are able to determine if a day is a public holiday or not. Which means that public holidays have an association with trip duration and count.
+
+It can be interpreted that during holidays in general, rides are for longer duration, but as compared working days the number of bookings are low. The same is concluded from our first analysis with weekends (Analysis 1.1). Having promotional plan to engage more users to ride bikes on public holidays can be beneficial for the company.
+
+**MODEL**
+
+```{r}
+
+#GETTING LIST OF ALL CHICAGO PUBLIC HOLIDAYS
+publicholidays <-  as.tibble(USElectionDay(2015:2019)) %>% union_all(as.tibble(USNewYearsDay(2015:2019))) %>% union_all(as.tibble(USMLKingsBirthday(2015:2019))) %>% union_all(as.tibble(USLincolnsBirthday(2015:2019))) %>% union_all(as.tibble(USWashingtonsBirthday(2015:2019))) %>% union_all(as.tibble(USCPulaskisBirthday(2015:2019))) %>% union_all(as.tibble(USMemorialDay(2015:2019))) %>% union_all(as.tibble(USIndependenceDay(2015:2019))) %>% union_all(as.tibble(USLaborDay(2015:2019))) %>% union_all(as.tibble(USColumbusDay(2015:2019))) %>% union_all(as.tibble(USVeteransDay(2015:2019))) %>% union_all(as.tibble(USThanksgivingDay(2015:2019))) %>% union_all(as.tibble(USChristmasDay(2015:2019))) %>% rename(Day=`GMT:value`)
+
+#DATA WRANGLE
+TidyDivvy_For_Analysis1 <- TidyDivvy_For_Analysis %>%  mutate(ride_day=as.Date(start_time)) %>% group_by(ride_day,Ride_Start_Year,Ride_Start_Month,Ride_Start_Day) %>% summarise(count=n(),mean_tripduration=mean(tripduration)) %>% ungroup()  %>% mutate(day=weekdays(ride_day),weekend=ifelse(day %in% c("Saturday","Sunday"),"Yes","No")) %>%  mutate(holiday=ifelse(ride_day %in% as.Date(publicholidays$Day),"Yes",ifelse(weekend =="Yes","Yes","No"))) %>%  mutate(holiday = ifelse(holiday== "Yes",1,0)) 
+
+#CHECK DATA AND SET FORMULA
+TidyDivvy_For_Analysis1 %>% head(3)
+model_for <- holiday ~ mean_tripduration+count
+
+#SAMPLE
+set.seed(9999)
+sample <- sample(c(TRUE, FALSE), nrow(TidyDivvy_For_Analysis1), replace = T, prob = c(0.6,0.4))
+train <- TidyDivvy_For_Analysis1[sample, ]
+test <- TidyDivvy_For_Analysis1[!sample, ]
+
+#RUN THE MODEL
+model1 <- glm(formula = model_for, family = "binomial", data = train)
+
+#SUMMARY
+summary(model1)
+list(model1 = pscl::pR2(model1)["McFadden"])
+exp(coef(model1))
+confint(model1)
+
+#Most influential in predictor
+caret::varImp(model1)
+
+#COLLINIEARITY
+car::vif(model1)
+
+#Residual Assessment - OUTLIER CHECK
+model1_data <- augment(model1) %>% 
+  mutate(index = 1:n())
+ggplot(model1_data, aes(index, .std.resid, color = holiday)) + 
+  geom_point(alpha = .5) +
+  geom_ref_line(h = 3)
+ 
+ model1_data %>% 
+  filter(abs(.std.resid) > 3)
+  
+#Cooks Distance
+ plot(model1, which = 4, id.n = 5)
+  model1_data %>%   top_n(5, .cooksd)
+  
+
+#MISSCLASSIFICATION ERROR
+test.predicted.m1 <- predict(model1, newdata = test, type = "response")
+list(  model1 = table(test$holiday, test.predicted.m1 > 0.5) %>% prop.table() %>% round(3))
+
+test %>%
+  mutate(m1.pred = ifelse(test.predicted.m1 > 0.5, 1, 0)) %>%
+  summarise(m1.error = mean(holiday != m1.pred))
+
+#SENSITIVITY AND SPECIFICITY
+(confusion_matrix <- table(test$holiday, test.predicted.m1 > 0.5))
+(sensitivity_precision  <-  as.numeric(confusion_matrix[2,2])/(as.numeric(confusion_matrix[2,1]+as.numeric(confusion_matrix[2,2]))))
+(specificity_accuracy  <-  as.numeric(confusion_matrix[1,1])/(as.numeric(confusion_matrix[1,1]+as.numeric(confusion_matrix[1,2]))))
+
+#ROC AND AUC CURVE
+prediction(test.predicted.m1, test$holiday) %>%
+  performance(measure = "tpr", x.measure = "fpr") %>%
+  plot()
+
+prediction(test.predicted.m1, test$holiday) %>%
+  performance(measure = "auc") %>%
+  .@y.values
+
+```
+
+***
+***
+
+### ANALYSIS 3.1
+
+#### CLUSTER AGE GROUPS BASED UPON BOOKING COUNT AND TRIP DURATION
+
+**Overview**
+
+Here we have 3 clusters that has shown to be an optimum number from ELBOW and SILOUETTE graphs.
+
+1.The first cluster age groups those who contribute to more number of bookings, and have an average trip booking time of 13 minutes
+
+2.The second cluster are users in the age groups that book less often, but generally for more duration (around 22 minutes)
+
+3.The third cluster are users in the age group that account to average number of bookings with a mean duration almost as that of first cluster, at about 13 minutes
+
+From the above details, targeted advertising can be made to improve booking rate and duration based on Age groups. Also, we can see that the most important age group are between 25-40 who contribute to the majority of bookings.
+
+**MODEL**
+
+```{r}
+#WRANGLE DATA
+ TidyDivvy_For_Analysis1 <- TidyDivvy_For_Analysis  %>%  filter(!is.na(Age)) %>% mutate(Age_grp =case_when(
+    .$Age  < 5 ~ "1-5",
+    .$Age  > 5 & .$Age <= 10 ~ "5-10",
+    .$Age  > 10 & .$Age <= 15 ~ "10-15",
+    .$Age  > 15 & .$Age <= 20 ~ "15-20",
+    .$Age  > 20 & .$Age <= 25 ~ "20-15",
+    .$Age  > 25 & .$Age <= 30 ~ "25-30",
+    .$Age  > 30 & .$Age <= 35 ~ "30-35",
+    .$Age  > 35 & .$Age <= 40 ~ "35-40",
+    .$Age  > 40 & .$Age <= 45 ~ "40-45",
+    .$Age  > 45 & .$Age <= 50 ~ "45-50",
+    .$Age  > 50 & .$Age <= 55 ~ "50-55",
+    .$Age  > 55 & .$Age <= 60 ~ "55-60",
+    .$Age  > 60 & .$Age <= 65 ~ "60-65",
+    .$Age  > 65 & .$Age <= 70 ~ "65-70",
+    .$Age  > 70 & .$Age <= 75 ~ "70-75",
+    .$Age  > 75 & .$Age <= 80 ~ "75-80",
+    .$Age  > 80 & .$Age <= 85 ~ "80-85",
+    .$Age  > 85 & .$Age <= 90 ~ "85-90",
+    .$Age  > 90 & .$Age <= 95 ~ "90-95",
+    .$Age  > 95 & .$Age <= 100 ~ "95-100",
+    .$Age  > 100 & .$Age <= 105 ~ "100-105",
+    .$Age  > 105 & .$Age <= 110 ~ "105-110",
+    TRUE ~ "other"
+  ) ) %>%   group_by(Age_grp) %>%   summarise(bookingcount=n(),mean_tripduration=mean(tripduration))  %>% filter(bookingcount>10) #Setting booking count filter to eleminate clusternig of age groups based on few records only, as they may contain outliers casuing them to be designated to in-correct class.
+
+#NORMALIZE
+  temp <- na.omit(TidyDivvy_For_Analysis1)
+ temp <- temp %>% tibble::column_to_rownames(var="Age_grp")
+ temp <- scale(temp)
+
+#CLUSTER
+ k2 <- kmeans(temp, centers = 3, nstart = 50)
+#VISUALIZE CLUSTER
+ fviz_cluster(k2, data = temp)
+#SUMMARISE CLUSTER
+ str(k2)
+
+#ELBOW
+ fviz_nbclust(temp, kmeans, method = "wss")
+#SILOUETTE
+ fviz_nbclust(temp, FUNcluster=kmeans, method = "silhouette")
+#GAP
+ gap_stat <- clusGap(temp, FUN = kmeans, nstart = 25,K.max = 12, B = 50)
+  print(gap_stat, method = "firstmax")
+  fviz_gap_stat(gap_stat)
+
+#SUMMARISE
+TidyDivvy_For_Analysis1 %>%
+  mutate(Cluster = k2$cluster) %>%
+  group_by(Cluster) %>%
+  summarise(count=n(),mean_tripduration = mean(mean_tripduration))
+
+#VIEW
+TidyDivvy_For_Analysis1 %>%
+  mutate(Cluster = k2$cluster) 
+```
+
+***
+***
+
+### ANALYSIS 3.2
+
+#### CLUSTER STATION IDS BASED UPON BOOKING COUNT AND TRIP DURATION
+
+Here we have 3 clusters that has shown to be an optimum number from ELBOW and SILOUETTE graphs.
+
+1. The first cluster are the stations from where most bookings are made, and they generally tend to be around 17 minutes duration
+
+2. The second cluster are stations from where less bookings are made, but they generally tend to be for longer duration around 3 hours.
+
+3. Cluster three describes stations that have average rate of bookings with mean trip duration that is about 20 minutes
+
+From the above details, strategic planning can be made to improve booking rate and duration based on stations IDs.
+
+We can use this data to prioritize which stations should have more number of bike stands. The location which are high in demand (more bookings made - cluster 1) require more number of stations. Cluster 1, to us should be the most important stations. They must have sufficient number of bikes stands as there are more number of bookings from there.
+
+Included in this analysis, is how these clusters are distributed on geographic scale. These cluster have been placed on the Chicago city map to look for any possible patterns. 
+
+On mapping these clusters, it can be clearly seen that, cluster 1 which are the highest used stations are situated mostly in the coast area and near key tourism infrastructure such as the Millennium Park, Willis Tower, Navy Pier, Aquarium and zoo. This indicates bikes being used for leisure and tourism activities.
+
+***
+
+![Cluster 1 Centroid](Cluster1-Epicenter.png)
+
+***
+
+**MODEL**
+
+```{r}
+#DATA WRANGLE
+ TidyDivvy_For_Analysis1 <- TidyDivvy_For_Analysis %>% filter(!is.na(tripduration)) %>% group_by(from_station_id) %>% summarise(bookingcount=n(),mean_tripduration=mean(tripduration)) %>%  filter(bookingcount>1) #booking filter added to filter stations remove stations that are being plotted with just 1 record and not mean of trip duration. There is one station with one booking and very high trip duration that does not appear fair enough to be added to this cluster.
+
+#NORMALIZE
+ temp <- na.omit(TidyDivvy_For_Analysis1)
+ temp <- temp %>% tibble::column_to_rownames(var="from_station_id")
+ temp <- scale(temp)
+ 
+#CLUSTER
+ k2 <- kmeans(temp, centers = 3, nstart = 50)
+#VISUALIZE CLUSTER
+ fviz_cluster(k2, data = temp,geom="point")
+ 
+#SUMMARISE CLUSTER
+  str(k2)
+
+#ELBOW
+ fviz_nbclust(temp, kmeans, method = "wss")
+#SILOUETTE
+ fviz_nbclust(temp, FUNcluster=kmeans, method = "silhouette")
+#GAP
+ gap_stat <- clusGap(temp, FUN = kmeans, nstart = 25,K.max = 10, B = 50)
+  print(gap_stat, method = "firstmax")
+  fviz_gap_stat(gap_stat)
+
+#SUMMARISE
+TidyDivvy_For_Analysis1 %>%
+  mutate(Cluster = k2$cluster) %>%
+  group_by(Cluster) %>%
+  summarise(stations=n(),mean_tripduration=mean(mean_tripduration),mean_booking_count=mean(bookingcount))
+
+#VIEW CLUSTER AND STATION DATA
+TidyDivvy_For_Analysis1 %>%  mutate(Cluster = k2$cluster) %>% left_join(TidyDivvy_For_Analysis,by=c("from_station_id"="from_station_id")) %>% distinct(from_station_name,from_station_id,From_Loc_GPS,Cluster)
+
+#SHOW GPS DATA NO MAP TO SEE IF THESE CLUSTER HAVE ANY SIGNIFICANT RELATIONSHIP WITH CHICAGO'S INFRASTRUCTURE
+
+#GET FULL MAP
+worldmap <- ne_countries(scale = "medium", returnclass = "sf")
+
+#GET STATIONID BY CLUSTER
+clustered_station <- TidyDivvy_For_Analysis1 %>%  mutate(Cluster = k2$cluster,as.factor(Cluster)) %>% select(from_station_id,Cluster)
+
+#LOAD STATION DATA AND JOIN WITH CLUSTERS
+Stations <- read_csv("Data\\Divvy_Bicycle_Stations.csv")
+Stations <- Stations %>% select(ID,Latitude,Longitude) 
+plot_station <- clustered_station %>% left_join(Stations,by= c("from_station_id"="ID"))
+plot_station <-  plot_station %>% na.omit()
+
+#GET STATE DATA
+states <- st_as_sf(map("state", plot = FALSE, fill = TRUE))
+states <- cbind(states, st_coordinates(st_centroid(states)))
+
+#GET COUNTY DATA
+counties <- st_as_sf(map("county", plot = FALSE, fill = TRUE))
+counties <- subset(counties, grepl("illinois", counties$ID))
+counties$area <- as.numeric(st_area(counties))
+
+#PLOT MAP
+ggplot(data = worldmap) +
+    geom_sf() +
+    geom_sf(data = states, fill = NA) + 
+    geom_text(data = states, aes(X, Y, label = ID), size = 5) +
+    geom_sf(data = counties, fill = NA, color = gray(.5)) +
+    geom_point(data = plot_station, aes(x = Longitude, y= Latitude,color=as.factor(Cluster)), size = 1) +
+    coord_sf(xlim = c(-88, -87.4), ylim = c(42.1, 41.7), expand = FALSE)+
+    ggtitle("Chicago Stations Map")+
+    xlab("Latitude") +
+    ylab("Longitude")
+
+#Cluster Epicenter
+plot_station %>% group_by(Cluster) %>% summarise(Latitude=mean(Latitude),Longitude=mean(Longitude))
+
+```
+
+***
+***
+
+### ANALYSIS 4.1
+
+#### CLASSIFY STATIONS BASED ON GPS, CONSIDERING CLUSTER 1 FROM ABOVE ANALYSIS AS CORE STATIONS FOR OUR BUSINESS AND CLUSTER 2,3  AS SUPPORT STATIONS(NON-CORE). THIS WILL HELP CLASSIFY ANY FUTURE STATIONS THAT MAY BE PLANNED INTO EITHER CORE OR SUPPORT STATION.
+
+**Note**
+
+This is a continued exploration from the previous analysis. We are classifying stations falling under cluster 2 and 3 from the previous analysis as one group. Cluster 1 will be another class, the class that is more important to our business, let us call it core stations class.
+
+In this analysis we are trying to create a model to classify stations into either Core stations or Support stations class. This model will help us decide to which class will a future station be assigned based on it's GPS co-ordinates. 
+
+This will help us decide things such as, Imagine a scenario that a new station setup is being planned by the CEO or other Executive and it;s GPS is falling in Core stations class, then we need to make sure that station has more number of bike stands, to ensure the customer demand.
+
+From the results we can observe that our model is able to classify the station into Core (1) and Support (2) classes with an error percentage of 18%, which shows that our model is doing a decent job. So, in the future if Divvy bikes is planning to expand and increase it bike stations in Chicago, they can use this model to make appropriate decisions.
+
+***
+
+**MODEL**
+
+```{r}
+#DATA WRANGLE
+stations_classify <- plot_station %>% select(Cluster,Latitude,Longitude) %>% mutate(Cluster=ifelse(Cluster==3,2,Cluster)) %>%  mutate(Cluster=as.factor(Cluster))
+
+#PLOT TO SEE CLUSTERS
+ggplot(data = stations_classify, aes(x = Latitude, y = Longitude, color = Cluster, shape = Cluster)) + 
+  geom_point(size = 2) +
+  scale_color_manual(values=c("#000000", "#FF0000","#0000FF")) +
+  theme(legend.position = "none")
+
+#SAMPLE
+set.seed(9999)
+sample <- sample(c(TRUE, FALSE), nrow(stations_classify), replace = T, prob = c(0.6,0.4))
+train <- stations_classify[sample, ]
+test <- stations_classify[!sample, ]
+
+#FIND THE BEST COST
+tune.out <- tune(svm, Cluster~., data = train, kernel = "radial",
+                 ranges = list(cost = c(0.1,1,10,100,1000),
+                 gamma = c(0.5,1,2,3,4)))
+tune.out$best.model
+
+#RUN MODEL
+svmfit <- svm(Cluster~., data = train, kernel = "radial", gamma =140 , cost = 10)
+
+#PLOT MODEL
+plot(svmfit, train)
+
+#TEST MODEL PRECTION
+ypred <- predict(svmfit, test)
+(misclass <- table(predict = ypred, truth = test$Cluster))
+
+#ERROR PERCENT
+(overall_error <- (misclass[1,2]+misclass[2,1]) / ( misclass[1,1] + misclass[2,2] ) )
+
+```
+
+***
+***
+
+### Conclusion
+
+When we first started off with this dataset, we had a vague idea of what our results will look like. We had some predefined thoughts as to how the outcome of the analysis would look like, such as thinking temperature would have a serious effect on each individual booking and also expected to see that the booking patterns varied for different user types when we joined the external data. Post analysis we understood, not all that we assumed came true, we are shocked to see some results such as snow depth having a positive correlation with booking count, temperature not being a major factor in influencing individual bookings. There were some interesting results that changed our mindset on how important it is to run analysis to completely understand the scenario based out of true facts in the data. 
+
+Overall, it has been more of challenge than expected to work on this dataset, which at first glance gives a false impression that external factors such as temperature obviously effect individual bookings. The journey of molding data to understand it’s true meaning has exposed us to depths that wouldn’t have been possible without selection of such a challenging dataset. It has not only allowed us to learn modeling from an academic standpoint, but took us a level higher and put us in the shoes of real world data scientist to work our way through the entire analysis process. In the end, we are glad that we were able to explore and explain some very interest finding from the dataset and create models that predict the outcome with a good accuracy and precision.
+
+***
+***
+***
+
+### References:
+
+#### Divvy Data: 
+<https://divvy-tripdata.s3.amazonaws.com/index.html>
+
+#### Weather Data: 
+<https://w2.weather.gov/climate/xmacis.php?wfo=cle>
+
+#### Other Sources: 
+<https://rstudio.com/> 
+<https://rstudio.com/>
+
+#### Thank you!
+#### DIVVY TEAM
+
