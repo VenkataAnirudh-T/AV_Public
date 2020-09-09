@@ -1,0 +1,513 @@
+---
+title: "MAD Project Analysis"
+author: "Anirudh"
+date: "5/19/2020"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    source_code: embed
+runtime: shiny
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# VERSIONS 
+
+/********************** V2 FEATURES *****************************/
+-- CROSS CHAT SCORING GRAPH [OVER ALL -USING AFINN (MAIN) / BING (SUPPORT)]
+-- SENTIMENT ANALYSIS GRAPH [OVER ALL -USING NRC]
+-- STATISTICS [OVER ALL -USING AFINN (MAIN) / BING (SUPPORT)] (chatid | Negative_perc | Positive_perc | negative_angle_index | anger)
+
+/********************** V4 FEATURES *****************************/
+-- CROSS CHAT SCORING GRAPH [BOT/USER -USING AFINN]
+-- CROSS CHAT SCORING GRAPH [BOT/USER -USING BING]
+-- CROSS CHAT (CHUNK) SCORING GRAPH [BOT/USER -USING AFINN]
+-- CROSS CHAT (CHUNK) SCORING GRAPH [BOT/USER -USING BING]
+-- SENTIMENT ANALYSIS GRAPH [BOT/USER -USING NRC]
+-- SENTIMENT ANALYSIS GRAPH [BOT/USER -USING BING]
+-- STATISTICS [USER ONLY -USING AFINN] (chatid | Negative_perc | Positive_perc | negative_angle_index | anger)
+-- STATISTICS [OVER ALL -USING AFINN] (chatid | change_in_negative_angle)
+
+
+# LOAD LIBRARY
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(gutenbergr)
+library(scales)
+library(stringr)
+library(tidyr)
+library(wordcloud)
+library(reshape2)
+library(forcats)
+library(igraph)
+library(ggraph)
+library(widyr)
+library(tm)
+library(topicmodels)
+library(quanteda)
+library(Matrix)
+library(tm.plugin.webmining)
+library(purrr)
+library(scales)
+library(mallet)
+library(rjson)
+library(shiny)
+library(DT) 
+library(corrr)
+library(flexdashboard)
+library(shiny)
+library(shinydashboard)
+library(stm)
+```
+
+# SETUP INITIAL CONFIGURATION
+
+```{r}
+do_uni_gram <- FALSE
+
+do_multi_gram <- TRUE
+n_gram_size <- 2
+
+do_chunk_perc <- TRUE
+perc_value <- 20
+
+remove_stopwords <-  TRUE
+
+remove_negation <- TRUE
+negation_words <- c("not", "no", "never", "without")
+```
+
+# IMPORT DATA
+
+### Import data -> Store in tibble -> General Cleanup
+```{r}
+#Import
+actual_data <- read.csv("Data\\controlset.csv",encoding = "UTF-8")
+
+#Load to tibble
+actual_data <-  as.tibble(actual_data)
+
+#Clean up
+actual_data <- actual_data %>% rename(chatid=`X.U.FEFF.chatid`)
+```
+
+# TOKENIZE
+
+```{r}
+#TOKENIZE
+if(do_uni_gram)
+{
+  tidy_data <- actual_data %>%  unnest_tokens(word, text)
+}
+if(do_multi_gram)
+{
+  tidy_data <- actual_data %>%  
+    unnest_tokens(multi_gram,text,token ="ngrams",n=n_gram_size) %>% 
+    separate(multi_gram,into = c("word1","word"),sep=" ") %>%
+    filter(!is.na(word),!grepl("[[:digit:]]",word))
+}
+
+```
+
+# FILTER STOP AND NEGATION WORDS
+
+```{r}
+if(remove_stopwords)
+{
+  data(stop_words)
+  tidy_data <- tidy_data %>%
+  anti_join(stop_words,by = c("word"="word"))
+}
+
+#Setup Negation Flag and Filter
+if(remove_negation)
+{
+  tidy_data <- tidy_data %>%  mutate(negate_flg=if_else(word1 %in% negation_words,"1","0"))
+  tidy_data <-  tidy_data %>%  filter(negate_flg==0)
+}
+```
+
+# INITIALIZE AND APPPLY LEIXCONS
+
+**About:**
+
+1. Affin lexicon scale: -5 to +5 , it specifies the degree of negativity
+
+2. Bing lexicon scale: Postive or Negative, it does not have a scale, just mentions if a word is negative or positive
+
+3. NRC lexicon scale: Anger,Trust,Fear....10 in total, mentions what a emotion a word represents.
+
+**Note:**
+
+1. NRC lexicon will be specifically used in "sentiment analysis plotting" and not "across-chat negative-positive scoring plot" as it specifically is designed for emotion interpretation
+
+2. Affin lexicon will be specifically used in plotting "across-chat negative-positive scoring plot" and overall conversation scoring
+
+3. Since there may be words present in Bing lexicon that may not be present in Affin lexicons, we will be using standardized average positive/negative score from Affin Lexicons (Avg negative score: -2.06 & Avg postive score: 2.08) in conjunction with Bing to improve the overall interpretation
+
+```{r}
+afinn_lex <- get_sentiments("afinn")
+bing_lex <- get_sentiments("bing")
+nrc_lex <- get_sentiments("nrc")
+
+
+tidy_data_scoring <- tidy_data %>% 
+  left_join(afinn_lex) %>% 
+  rename(afinn_sentiment=value) %>% 
+  left_join(bing_lex) %>% 
+  rename(bing_sentiment=sentiment) #%>%
+  #mutate(bing_sentiment=ifelse(bing_sentiment=="positive",2.08,ifelse(bing_sentiment=="negative",-2.06,NA))) 
+              
+
+tidy_data_nrc <- tidy_data %>% 
+              inner_join(nrc_lex) %>% 
+              rename(nrc_sentiment=sentiment) 
+```
+
+# Perform Sentiment Analysis
+
+```{r}
+tidy_data_sentiment <- tidy_data_nrc %>% 
+  group_by(chatid,user,nrc_sentiment) %>% 
+  summarise(count=n()) %>% 
+  ungroup() %>%  
+  pivot_wider(names_from = nrc_sentiment,values_from = count) %>% 
+  replace(.,is.na(.),0)
+
+tidy_data_sentiment <-  tidy_data_sentiment %>% 
+  mutate(Total_words_scored=apply(tidy_data_sentiment[3:12],1,sum)) %>% 
+  mutate(anticipation=anticipation/Total_words_scored*100,
+        joy=joy/Total_words_scored*100,
+        positive=positive/Total_words_scored*100,
+        trust=trust/Total_words_scored*100,
+        surprise=surprise/Total_words_scored*100,
+        anger=anger/Total_words_scored*100,
+        disgust=disgust/Total_words_scored*100,
+        fear=fear/Total_words_scored*100,
+        negative=negative/Total_words_scored*100,
+        sadness=sadness/Total_words_scored*100)
+
+tidy_data_sentiment_bing <-  tidy_data_scoring %>% 
+                              filter(!is.na(bing_sentiment)) %>% 
+                              group_by(chatid,user,bing_sentiment) %>% 
+                              count() %>% 
+                              ungroup() %>% 
+                              pivot_wider(names_from = bing_sentiment,values_from = n) %>% 
+                              replace(.,is.na(.),0) %>% mutate(Total_words_scored=positive+negative) %>%
+                              mutate(positive=positive/Total_words_scored*100,negative=negative/Total_words_scored*100)
+```
+
+# Cross-Chat scoring
+
+```{r}
+#Calculating overall score, i.e., words for which afinn score is not available, we are replacing it with earlier calculated bing score
+tidy_data_scoring <- tidy_data_scoring %>% 
+  mutate(overall_score=afinn_sentiment)
+
+#Cross Chat Scoring
+tidy_data_cross_chat <- tidy_data_scoring  %>% 
+  filter(!is.na(overall_score)) %>% 
+  group_by(chatid,chatorder,user)  %>%  
+  summarise(per_message_score=mean(overall_score)) %>% 
+  ungroup()
+
+tidy_data_cross_chat_bing <- tidy_data_scoring  %>% 
+  filter(!is.na(bing_sentiment)) %>% 
+  group_by(chatid,chatorder,user)  %>%
+  mutate(bing_sentiment=ifelse(bing_sentiment=="postive",1,-1)) %>% 
+  summarise(per_message_score=sum(bing_sentiment)) %>% 
+  ungroup()
+
+#Adding 0 at chat order 1 to chats with no scoring on 1st message for better visual appeal in the graph
+tidy_data_cross_chat <- tidy_data_cross_chat %>% 
+  union_all(
+    tidy_data_cross_chat %>% 
+    group_by(chatid) %>% 
+      summarise(chatorder=min(chatorder)) %>% 
+      filter(chatorder>1) %>% 
+      mutate(chatorder=as.integer(1),per_message_score=0))
+
+tidy_data_cross_chat_bing <- tidy_data_cross_chat_bing%>% 
+  union_all(
+    tidy_data_cross_chat_bing %>% 
+    group_by(chatid) %>% 
+      summarise(chatorder=min(chatorder)) %>% 
+      filter(chatorder>1) %>% 
+      mutate(chatorder=as.integer(1),per_message_score=0))
+
+```
+
+# Overall Scoring
+
+### Overall scoring is consist of three sections
+
+1. We will show the overall negative and postive content percentage per chat based on scoring
+
+2. We shall run a linear regression model, wherein chat order is our predictor and per message score in individual chats is the dependent variable. From this we are trying to acheive negative rate index.
+
+3. We will append the anger % per chat to the overall scoring tibble by join sentiment data
+
+***Note***
+
+We are running the linear regresion model for only one purpose. To get the slope. We are not interested in p-value or predictions. The slope of the best fitted line will help up determine if the conversation is progressing in a negative or postive manner.
+
+***Negative Rate Index***
+
+An index that specfies if a conversation is heading into a negative tone. The scale lies between -90 to +90. Where Anthying over 0 is bad, indicating the chat going into a negative context. Higher the number higher the risk. Values under 0 state that the conversation might have had a bad start, but the bot was able to bring it to a positive end.
+
+```{r}
+
+
+#Over all Chat Scoring
+tidy_data_overall_scoring <- tidy_data_scoring  %>%
+  filter(!is.na(overall_score)) %>% 
+  mutate(score_type=ifelse(overall_score>0,"Positive","Negative")) %>% 
+  group_by(chatid,user,score_type)  %>%  
+  summarise(overall_score=sum(overall_score)) %>% 
+  pivot_wider(names_from = score_type,values_from = overall_score) %>%
+  replace(.,is.na(.),0) %>% 
+  mutate(Total_words_scored=abs(Negative)+Positive) %>%
+  mutate(Negative_perc=abs(Negative)/Total_words_scored*100,Positive_perc=Positive/Total_words_scored*100) %>% 
+  arrange(desc(Negative_perc))
+
+#Creating Linear Model to get the best fitted line slope
+tidy_data_LM_model <- tidy_data_scoring  %>% 
+  filter(!is.na(overall_score)) %>% 
+  group_by(chatid,user,chatorder)  %>%  
+  summarise(per_message_score=mean(overall_score)) %>% 
+  ungroup() 
+
+#Append details with overall scoring tibble
+tidy_data_overall_scoring <- tidy_data_overall_scoring %>% add_column(slope = 0)
+
+model_for <-  per_message_score ~ chatorder
+
+for(i in  tidy_data_LM_model %>% distinct(chatid)%>%  pull(chatid) )
+{
+  for(usr in tidy_data_LM_model %>% filter(chatid==i) %>% distinct(user) %>% pull(user))
+  {
+    dat <- tidy_data_LM_model %>% filter(chatid==i & user==usr)
+    if(dat %>% summarise(n_distinct(chatorder)) > 2 )
+      {
+      slope_model <- lm(model_for, data = dat)
+      tidy_data_overall_scoring <- tidy_data_overall_scoring %>%
+        mutate(slope=ifelse(chatid==i & user==usr,signif(slope_model$coef[[2]], 2),slope))
+      }
+  }
+  
+}
+
+#find angle and set negative rate index (rate at which negativity is increasing across a chat, higher number higher the negativity increase in chat)
+tidy_data_overall_scoring <- tidy_data_overall_scoring %>% mutate(angle=as.integer(atan(slope)*180/pi),negative_rate_index=-1*angle)
+
+tidy_data_overall_scoring <- tidy_data_overall_scoring %>% left_join(tidy_data_sentiment %>% select(chatid,user,anger),by = c("chatid"="chatid","user"="user"))
+
+#write.csv(anger,file="Bkp\\anger.csv")
+#save(tidy_data_summary,file="Bkp\\Google_conv_tidy_data_summary.rda")
+```
+
+# Plot graphs
+
+```{r eval=FALSE}
+tidy_data_overall_scoring %>% filter(user!="Bot") %>%  select(chatid,Total_words_scored,Positive_perc,Negative_perc,negative_rate_index,anger) %>% print(nrow(20))
+
+if(do_chunk_perc)
+{
+  actual_data_chunked <- actual_data %>% group_by(chatid) %>% summarise(msg_cnt=n_distinct(chatorder),chunk_size=round(msg_cnt*perc_value/100))
+  
+  tidy_data_cross_chat %>% 
+  filter(chatid==10 & !is.na(user)) %>% 
+    left_join(actual_data_chunked, by = ("chatid"="chatid")) %>% 
+    mutate(chunk_order=ceiling(chatorder/chunk_size)) %>% 
+    group_by(chunk_order) %>% 
+    summarise(per_message_score=mean(per_message_score)) %>% 
+    ungroup() %>% 
+     ggplot() +
+  geom_line(mapping =  aes(x=chunk_order,y=per_message_score),color='red')+
+  geom_point(mapping =  aes(x=chunk_order,y=per_message_score),color='black')+
+  #geom_smooth(mapping =  aes(x=chatorder,y=per_message_score),se = F,color='black')+
+  geom_hline(yintercept =0,color="blue")+
+  theme(text = element_text(color = "lightseagreen"),strip.text=element_text( colour="navy")) +
+  ggplot2::annotate("text",x=3,y=4, label= "Postive Context")+
+  ggplot2::annotate("text",x=3,y=-4, label= "Negative Context")+
+  ylim(-5,5)+
+  ggtitle(paste("CROSS CHAT -AFFFIN SCORE [CHUNK Split :",perc_value,"%]"))
+  
+  tidy_data_cross_chat_bing %>% 
+  filter(chatid==10 & !is.na(user)) %>% 
+    left_join(actual_data_chunked, by = ("chatid"="chatid")) %>% 
+    mutate(chunk_order=ceiling(chatorder/chunk_size)) %>% 
+    group_by(chunk_order) %>% 
+    summarise(per_message_score=sum(per_message_score)) %>% 
+    ungroup() %>% 
+     ggplot() +
+  geom_line(mapping =  aes(x=chunk_order,y=per_message_score),color='red')+
+  geom_point(mapping =  aes(x=chunk_order,y=per_message_score),color='black')+
+  #geom_smooth(mapping =  aes(x=chatorder,y=per_message_score),se = F,color='black')+
+  geom_hline(yintercept =0,color="blue")+
+  theme(text = element_text(color = "lightseagreen"),strip.text=element_text( colour="navy")) +
+  ggplot2::annotate("text",x=3,y=4, label= "Postive Context")+
+  ggplot2::annotate("text",x=3,y=-4, label= "Negative Context")+
+  ggtitle(paste("CROSS CHAT -BING SCORE [CHUNK Split :",perc_value,"%]"))
+  
+  tidy_data_chunk_slope  <- tidy_data_cross_chat %>% 
+  filter(!is.na(user)) %>% 
+      group_by(chatid) %>% 
+    left_join(actual_data_chunked, by = ("chatid"="chatid")) %>% 
+    mutate(chunk_order=ceiling(chatorder/chunk_size)) %>% 
+      filter(n_distinct(chunk_order)>2) %>% 
+    group_by(chatid,chunk_order) %>% 
+    summarise(per_message_score=mean(per_message_score)) %>% 
+      mutate(curr_slope=round(lm(per_message_score ~ chunk_order)$coeff[[2]],2)) %>% 
+      filter(chunk_order!=max(chunk_order)) %>% 
+      mutate(last_slope=round(lm(per_message_score ~ chunk_order)$coeff[[2]],2)) %>% 
+      mutate(slope_change=curr_slope-last_slope) %>% 
+      distinct(chatid,slope_change) %>% 
+    mutate(angle_chunk=as.integer(atan(slope_change)*180/pi),negative_rate_chunk=-1*angle_chunk)
+    
+actual_data_chunked %>% left_join(tidy_data_chunk_slope,by = c("chatid"="chatid")) %>% replace(.,is.na(.),0)
+
+
+}
+tidy_data_cross_chat %>% 
+  filter(chatid==11 & !is.na(user)) %>% 
+  ggplot() +
+  geom_line(mapping =  aes(x=chatorder,y=per_message_score),color='red')+
+  geom_point(mapping =  aes(x=chatorder,y=per_message_score),color='black')+
+  #geom_smooth(mapping =  aes(x=chatorder,y=per_message_score),se = F,color='black')+
+  geom_hline(yintercept =0,color="blue")+
+  theme(text = element_text(color = "lightseagreen"),strip.text=element_text( colour="navy")) +
+  ggplot2::annotate("text",x=3,y=4, label= "Postive Context")+
+  ggplot2::annotate("text",x=3,y=-4, label= "Negative Context")+
+  ylim(-5,5)+
+  facet_wrap(~user,ncol = 1)+
+  ggtitle("CROSS CHAT -AFFFIN SCORE")
+
+tidy_data_cross_chat_bing %>% 
+  filter(chatid==11 & !is.na(user)) %>% 
+  ggplot() +
+  geom_line(mapping =  aes(x=chatorder,y=per_message_score),color='red')+
+  geom_point(mapping =  aes(x=chatorder,y=per_message_score),color='black')+
+  #geom_smooth(mapping =  aes(x=chatorder,y=per_message_score),se = F,color='black')+
+  geom_hline(yintercept =0,color="blue")+
+  theme(text = element_text(color = "lightseagreen"),strip.text=element_text( colour="navy")) +
+  ggplot2::annotate("text",x=3,y=4, label= "Postive Context")+
+  ggplot2::annotate("text",x=3,y=-4, label= "Negative Context")+
+  facet_wrap(~user,ncol = 1)+
+  ggtitle("CROSS CHAT -BING SCORE")
+
+tidy_data_sentiment %>% 
+  select(-Total_words_scored) %>% 
+  filter(chatid==11) %>% 
+  pivot_longer(c(-chatid,-user),names_to = "emotion",values_to = "score") %>% 
+  ggplot()+
+  geom_bar(mapping = aes(x=emotion,y=score,fill=emotion),stat = "identity",show.legend =F)+
+  coord_flip() +
+  facet_wrap(~user)+
+  ggtitle("SENTIMENT CHART -NRC SCORE")
+ 
+tidy_data_sentiment_bing %>% 
+  select(-Total_words_scored) %>% 
+  filter(chatid==11) %>% 
+  pivot_longer(c(-chatid,-user),names_to = "emotion",values_to = "score") %>% 
+  ggplot()+
+  geom_bar(mapping = aes(x=emotion,y=score,fill=emotion),stat = "identity",show.legend =F)+
+  coord_flip() +
+  facet_wrap(~user)+
+  ggtitle("SENTIMENT CHART -BING SCORE")
+
+
+tidy_data_idf <-  tidy_data %>% group_by(chatid,word) %>% count() %>% bind_tf_idf(word,chatid,n) %>% ungroup()
+
+tidy_data_idf %>% 
+  mutate(chatid=as.factor(chatid)) %>% 
+  group_by(chatid) %>% 
+  top_n(2,tf_idf) %>% 
+  ungroup() %>% 
+  mutate(word=reorder(word,tf_idf)) %>% 
+  ggplot(aes(word,tf_idf,fill=chatid)) + 
+  geom_col(show.legend = F) + 
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~chatid,scales ="free" ) + 
+  coord_flip()
+
+tidy_data_dfm <- tidy_data %>% count(chatid,word,sort = T) %>% cast_dfm(chatid,word,n)
+
+tidy_data_topicmodel <- stm(tidy_data_dfm,K = 5,init.type = "Spectral")
+
+tidy_beta <- tidy(tidy_data_topicmodel)
+
+tidy_beta %>% group_by(topic) %>% 
+  top_n((10)) %>% 
+  ungroup() %>% 
+  mutate(term = reorder(term,beta)) %>% 
+  ggplot(aes(term,beta,fill=topic))+
+  geom_col(show.legend = F)+
+  facet_wrap(~topic,scales = "free")+
+  coord_flip()
+  
+```
+
+# Testing code - Ignore
+
+```{r eval=FALSE}
+actual_data %>% filter(chatid==10) %>% select(user,text)
+tidy_data_scoring %>%  filter(!is.na(overall_score),chatid==10,user=="James") %>% arrange(chatorder) %>% print(n=100) 
+tidy_data_scoring %>%  filter(!is.na(overall_score),chatid==5) %>% arrange(chatorder) %>% print(n=100) 
+tidy_data_nrc %>%  filter(chatid==5) %>% arrange(nrc_sentiment) %>%  print(n=100) 
+
+#Important Linear model testing code
+model_for <-  per_message_score ~ chatorder
+dat <- tidy_data_LM_model %>% filter(chatid==3)
+fit1 <- lm(model_for, data = dat)
+ggplotRegression(fit1)
+
+ggplotRegression <- function (fit) {
+
+require(ggplot2)
+
+ggplot(fit$model, aes_string(x = names(fit$model)[2], y = names(fit$model)[1])) + 
+  geom_point() +
+  stat_smooth(method = "lm", col = "red") +
+  labs(title = paste("Adj R2 = ",signif(summary(fit)$adj.r.squared, 5),
+                     "Intercept =",signif(fit$coef[[1]],5 ),
+                     " Slope =",signif(fit$coef[[2]], 5),
+                     " P =",signif(summary(fit)$coef[2,4], 5)))+
+  ylim(-5,5)
+
+}
+
+tidy_data_cross_chat %>% 
+  filter(!is.na(user),chatid==10) %>% 
+    left_join(actual_data_chunked, by = ("chatid"="chatid")) %>% 
+    mutate(chunk_order=ceiling(chatorder/chunk_size)) %>% 
+      filter(n_distinct(chunk_order)>2) %>% 
+    group_by(chatid,chunk_order) %>% 
+    summarise(per_message_score=mean(per_message_score)) %>% 
+      mutate(curr_slope=round(lm(per_message_score ~ chunk_order)$coeff[[2]],2)) %>% 
+      filter(chunk_order!=max(chunk_order)) %>% 
+      mutate(last_slope=round(lm(per_message_score ~ chunk_order)$coeff[[2]],2)) %>% 
+      mutate(slope_change=curr_slope-last_slope) %>% 
+      distinct(chatid,slope_change) %>% 
+    mutate(angle_chunk=as.integer(atan(slope_change)*180/pi),negative_rate_chunk=-1*angle_chunk)
+
+tidy_data %>% select(chatid,user,word) %>% nest(words=c(word))
+
+tidy_data %>% select(chatid,word) %>% count(chatid,word) %>% cast_sparse(chatid,word,n)
+
+```
+
+# Open Point Code
+```{r}
+
+```
+

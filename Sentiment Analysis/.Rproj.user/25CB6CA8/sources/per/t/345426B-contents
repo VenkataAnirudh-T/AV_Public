@@ -1,0 +1,261 @@
+---
+title: "MAD Project Analysis"
+author: "TeamDivvy"
+date: "5/19/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(gutenbergr)
+library(scales)
+library(stringr)
+library(tidyr)
+library(wordcloud)
+library(reshape2)
+library(forcats)
+library(igraph)
+library(ggraph)
+library(widyr)
+library(tm)
+library(topicmodels)
+library(quanteda)
+library(Matrix)
+library(tm.plugin.webmining)
+library(purrr)
+library(scales)
+library(mallet)
+library(rjson)
+library(shiny)
+library(DT) 
+```
+
+```{r}
+dataset <- "Google_conv"
+
+do_uni_gram <- FALSE
+
+do_multi_gram <- TRUE
+n_gram_size <- 2
+
+remove_stopwords <-  TRUE
+
+negation_words <- c("not", "no", "never", "without")
+
+#
+movie_intel <- TRUE
+movie_identifier <- c("movie","showtime","cinema","theater","tickets","book")
+
+
+```
+
+```{r}
+load(file = paste("Data\\",dataset,".rda",sep = ""))
+
+actual_data_org <-  get(dataset)
+actual_data_org <- actual_data_org %>% mutate(text=tolower(text))
+
+actual_data <-  actual_data_org
+actual_data <-  actual_data %>% add_column(tag=NA)
+```
+
+
+```{r}
+if(movie_intel)
+{
+  movie_list <- read.csv("Data\\movies.csv")
+  movie_list <- movie_list %>% rename("movie_name"="title")
+  
+  movie_list <-   movie_list %>%
+              select(movie_name) %>%  
+              separate(movie_name , into = c("name","year"),sep ="\\s+(?=\\S*$)" ) %>% select(name) %>% 
+              mutate(Id = row_number())
+  
+  movie_list <-  movie_list %>% mutate(name=tolower(name))
+  movie_list <- movie_list %>% filter(nchar(name)>4) %>% mutate(name=str_replace_all(name, "[^[:alnum:]^[:space:]]", " ") )
+  
+  actual_data <-  actual_data %>% add_column(movie_name=NA)
+  actual_data_temp <-  actual_data %>% filter(str_detect(text,paste(movie_identifier,collapse  = "|"))) 
+  for(i in c(1:length(movie_list$name)))
+   {
+    print(i)
+    
+    movie_nme <- movie_list %>% filter(Id==i) %>% select(name)  %>%  as.character()
+    
+    actual_data_temp <- actual_data_temp  %>%
+      mutate(movie_name=ifelse(str_detect(text,movie_nme),paste(movie_name,"|",movie_nme,sep = ""),movie_name),tag="#movie") 
+  }
+  
+  actual_data_temp <-  actual_data_temp %>% mutate(movie_name= sub('...', '', movie_name),movie_name) 
+  actual_data_temp <-  actual_data_temp %>% mutate(text = str_replace_all(text,movie_name,'')) %>% filter(!is.na(movie_name))
+  
+  actual_data <-  actual_data %>% anti_join(actual_data_temp,by = c("conv_id"="conv_id","chat_order"="chat_order"))
+  actual_data <- actual_data %>% rbind(actual_data_temp)
+}
+```
+
+
+```{r}
+
+#TOKENIZE
+if(do_uni_gram)
+{
+  tidy_data <- actual_data %>%  unnest_tokens(word, text)
+}
+if(do_multi_gram)
+{
+  tidy_data <- actual_data %>%  
+    unnest_tokens(multi_gram,text,token ="ngrams",n=n_gram_size) %>% 
+    separate(multi_gram,into = c("word1","word"),sep=" ") %>% 
+    filter(!is.na(word),!grepl("[[:digit:]]",word))
+}
+if(remove_stopwords)
+{
+  data(stop_words)
+  tidy_data <- tidy_data %>%
+  anti_join(stop_words)
+}
+
+#NEGATION
+tidy_data <- tidy_data %>%  mutate(negate_flg=if_else(word1 %in% negation_words,"1","0"))
+
+#INITIALIZE LEIXCONS
+afinn_lex <- get_sentiments("afinn")
+bing_lex <- get_sentiments("bing")
+nrc_lex <- get_sentiments("nrc")
+
+afinn_lex %>% group_by(word) %>% count() %>% arrange(desc(n))
+t1 <- bing_lex %>% group_by(word) %>% count()  %>% filter(n>1) %>% select(word)
+bing_lex %>% inner_join(t1) %>% arrange(word)
+t2 <- nrc_lex %>% group_by(word) %>% count()  %>%  filter(n>1) %>% select(word)
+nrc_lex %>% inner_join(t2) %>% arrange(word)
+
+bing_lex %>% filter()
+
+#APPLY LEXICONS
+tidy_data <- tidy_data %>% 
+              left_join(nrc_lex) %>% rename(nrc_sentiment=sentiment) %>% 
+              left_join(bing_lex) %>% rename(bing_sentiment=sentiment) %>% 
+              left_join(afinn_lex) %>% rename(afinn_sentiment=value) 
+
+
+tidy_data_nrc <- tidy_data %>% filter(!is.na(nrc_sentiment)) %>% select(conv_id,chat_order,user_type,word1,word,nrc_sentiment)
+
+#NRC Transformation
+tidy_data_nrc <- tidy_data %>% 
+  filter(!is.na(nrc_sentiment)) %>% 
+  select(conv_id,nrc_sentiment) %>% 
+  mutate(score=1) %>% 
+  group_by(conv_id,nrc_sentiment) %>% 
+  summarise(tot_score=sum(score)) %>% 
+  ungroup() %>%  
+  pivot_wider(names_from = nrc_sentiment,values_from = tot_score) %>% 
+  replace(.,is.na(.),0) %>%
+  mutate(overall_score=anticipation+joy+positive+trust+anger+negative+fear+disgust+sadness+surprise) %>%
+  mutate(anticipation=anticipation/overall_score*100,joy=joy/overall_score*100,positive=positive/overall_score*100,trust=trust/overall_score*100,anger=anger/overall_score*100,negative=negative/overall_score*100,fear=fear/overall_score*100,disgust=disgust/overall_score*100,sadness=sadness/overall_score*100,surprise=surprise/overall_score*100) %>%
+  mutate(overall_positive=(anticipation+joy+positive+trust+surprise),overall_negative=(anger+negative+fear+disgust+sadness)) %>%
+  arrange(desc(anger)) #%>% 
+  #view()
+
+#AFFIN Transformation
+tidy_data_affin <- tidy_data  %>% 
+  filter(!is.na(afinn_sentiment)) %>% 
+  mutate(afinn_type=ifelse(afinn_sentiment>0,"Positive","Negative")) %>% 
+  group_by(conv_id,afinn_type)  %>%  
+  summarise(score=sum(abs(afinn_sentiment))) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = afinn_type,values_from = score) %>% 
+  replace(.,is.na(.),0) %>% 
+  mutate(total_score=Positive+Negative,negativity_perc=Negative/total_score*100) %>% 
+  arrange(desc(negativity_perc))  #%>% 
+  #View() %>% 
+  #filter(conv_id=="dlg-03aa0a4e-eb4f-4ef2-9b3e-d638872372a3")
+
+#BING Transformation
+tidy_data_bing <- tidy_data %>% filter(user_type=="USER")  %>%
+  filter(!is.na(bing_sentiment)) %>% mutate(score=1) %>% 
+  group_by(conv_id,bing_sentiment)  %>%  
+  summarise(overall_score=sum(score)) %>% 
+  pivot_wider(names_from = bing_sentiment,values_from = overall_score) %>% 
+  replace(.,is.na(.),0) %>% 
+  mutate(total_score=negative+positive, negativity_perc=negative/total_score*100) %>% 
+  arrange(desc(negativity_perc)) #%>% 
+  #view() %>% 
+  #filter(conv_id=="dlg-fdd242eb-56be-48c0-a56e-5478472500d0")
+
+
+tidy_data_nrc_mini <-  tidy_data_nrc %>% select(conv_id,anger,overall_score,overall_negative) %>%
+  rename(nrc_anger=anger,nrc_overall=overall_score,nrc_neg_perc=overall_negative)
+
+tidy_data_affin_mini <-  tidy_data_affin %>% select(conv_id,total_score,negativity_perc) %>%
+  rename(affin_overall=total_score,affin_neg_perc=negativity_perc)
+
+tidy_data_bing_mini <-  tidy_data_bing %>% select(conv_id,total_score,negativity_perc) %>%
+  rename(bing_overall=total_score,bing_neg_perc=negativity_perc)
+
+
+tidy_data_summary <- tidy_data_nrc_mini %>% full_join(tidy_data_affin_mini,by = "conv_id") %>% full_join(tidy_data_bing_mini,by = "conv_id") %>% replace(.,is.na(.),0)
+
+
+
+#TESTING
+x <- "dlg-03aa0a4e-eb4f-4ef2-9b3e-d638872372a3"
+
+x <-   "dlg-fdd242eb-56be-48c0-a56e-5478472500d0"
+tidy_data %>% filter(conv_id==x) %>% filter(!is.na(nrc_sentiment)|!is.na(bing_sentiment)|!is.na(afinn_sentiment)) %>% arrange(nrc_sentiment) %>%  print(n=200)
+actual_data %>% filter(conv_id==x) %>% select(user_type,text) %>% print(n=280)
+
+
+write.csv(anger,file="Bkp\\anger.csv")
+#save(Google_conv,file="Bkp\\Google_conv.rda")
+
+
+```
+
+
+```{r}
+ui <- fluidPage(
+  verbatimTextOutput("text"),
+  DTOutput("summary")
+)
+
+server <-  function(input,output){
+  output$summary <- renderDT(
+    datatable(tidy_data_summary,selection = "single"),#, # reactive data
+    #class = "display nowrap compact", # style
+    #filter = "top", # location of column filters
+    #options = list(  # options
+     # scrollX = TRUE,selection # allow user to scroll wide tables horizontally
+    #)
+  )
+  
+   observeEvent(input$summary_cell_clicked ,{ 
+     if(is.null(input$summary_cell_clicked$value))
+     {
+       
+     }
+     else
+     {
+       if(input$summary_cell_clicked$col==1 )
+     {
+       output$text <- renderText(input$summary_cell_clicked$col) 
+     }
+     }
+   })
+     
+
+}
+
+
+shinyApp(ui = ui,server = server)
+
+```

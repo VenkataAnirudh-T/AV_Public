@@ -1,0 +1,40 @@
+Meeting: 30th May 2020 [Version Files as of today: 2]
+- recheck negation flags 
+- seperate plots for bing and afinn: understand the differences
+- two cols for overall scores 
+- append nrc to the scoring
+- filter user, user chunks?? - avg chunk size:
+- slope over time
+
+Meeting: 9th June 2020 [Version Files as of today: 4]
+- search hospitality data
+- research on techniques for emotion identification
+- test word freq join with emotion list to indentify if topic modeling is suitable
+- explore emotion embeding
+- how to identify the real emotion in the chat?
+	- Use of control sets [Predefined sets]
+	- compare different models
+	- actual manager opinion
+- validate word embedding to emotion analysis
+
+Meeting: 23rd June 2020 [Version Files as of today: 6]
+- Try MS, ParallerDots APIs (Compare)
+- Hospitality data, subset (500): labels manuallyTopic - Topic - Modelling - set up call
+- LSTM resources
+
+Meeting: 30th June 2020 [Version Files as of today: 6 ; APIV2]
+-Combination of services approach
+-Test apis with diffcult to decipher conversations the services
+-Create Confusion matrix for 10 chats
+
+Meeting: 16th July 2020 [Version Files as of today: 6 ; APIV4]
+-Interrater-reliability
+-Emotion: Angry(1:5),Happy(1:5)
+
+Meeting: 23rd July 2020 [Version Files as of today: 6 ; APIV6]
+-Finalize on single API that gives the best result to predict
+-Sample Data: Quality Control on Survey + Mix data + 500 setences
+
+Meeting: 28th July 2020 [Version Files as of today: 6 ; APIV8]
+-Prototyping (line chart for emotion)
+-Hospitality data lookup

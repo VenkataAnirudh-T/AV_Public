@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1592919201460.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3292172013",
+    "id" : "56133F60",
+    "lastKnownWriteTime" : 1592940700,
+    "last_content_update" : 1592940700673,
+    "path" : "D:/Projects/665/MAD/MAD Project Analysis V6.Rmd",
+    "project_path" : "MAD Project Analysis V6.Rmd",
+    "properties" : {
+        "chunk_output_type" : "console",
+        "cursorPosition" : "439,40",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

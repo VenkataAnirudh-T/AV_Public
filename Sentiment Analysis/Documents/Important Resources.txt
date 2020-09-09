@@ -1,0 +1,11 @@
+Emotion Embeddings:
+https://www.aclweb.org/anthology/C18-1081.pdf
+https://www.aaai.org/ocs/index.php/FLAIRS/FLAIRS17/paper/download/15516/14967
+https://www.researchgate.net/publication/332087428_Sentiment-Aware_Word_Embedding_for_Emotion_Classification
+https://www.youtube.com/watch?v=DzAZ2Bq_dgU
+
+APIs:
+https://nordicapis.com/20-emotion-recognition-apis-that-will-leave-you-impressed-and-concerned/
+https://medium.com/rakuten-rapidapi/top-10-best-text-analytics-apis-watson-google-natural-language-and-more-b67907b9ba9f
+https://medium.com/towards-artificial-intelligence/analyzing-the-mood-of-chat-messages-with-google-cloud-nlps-api-a8f5d6c6de76
+https://www.paralleldots.com/emotion-analysis

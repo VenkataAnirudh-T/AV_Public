@@ -1,0 +1,149 @@
+---
+title: "MAD Project Analysis"
+author: "TeamDivvy"
+date: "5/19/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(gutenbergr)
+library(scales)
+library(stringr)
+library(tidyr)
+library(wordcloud)
+library(reshape2)
+library(forcats)
+library(igraph)
+library(ggraph)
+library(widyr)
+library(tm)
+library(topicmodels)
+library(quanteda)
+library(Matrix)
+library(tm.plugin.webmining)
+library(purrr)
+library(scales)
+library(mallet)
+library("rjson")
+```
+
+```{r}
+json_file <- "Data/test1.json" #1google
+json_data <- fromJSON(file=json_file)
+
+json_data[1]$utterances
+
+str(json_data)
+flatten(json_data)
+json_data[1]
+json_data[[1]]$utterances[[1]]$speaker
+sapply(json_data, "[[", "conversationId")
+sapply(json_data, "[[", "utterances[[","$index")
+
+for(i in seq_along(json_data))
+{
+  conv_id <-  json_data[i]$conversationId
+  conv_id
+}
+seq_along(json_data[[1]]$utterances)
+```
+
+```{r}
+
+test_data <-  tibble(conv_id = "INITIALIZE_ROW_1",chat_order=9999,user_type="BLANK",text="BLANK" )
+
+for(i in seq_along(json_data))
+{
+  conv_id <-  json_data[[i]]$conversationId
+  for(j in seq_along(json_data[[i]]$utterances))
+  {
+    chat_order <-  json_data[[i]]$utterances[[j]]$index
+    user_type <-  json_data[[i]]$utterances[[j]]$speaker
+    text <-  json_data[[i]]$utterances[[j]]$text
+    test_data <-  test_data %>% add_row(conv_id,chat_order,user_type,text)
+  }
+}
+
+```
+
+
+```{r}
+test_data <- test_data %>% filter(chat_order!=9999)
+
+tidy_data <-  test_data %>% unnest_tokens(word, text)
+nrc <- get_sentiments("nrc") 
+anger <- nrc %>% filter(sentiment %in% c("anger") ) 
+tidy_data %>% inner_join(anger) %>% group_by(word) %>% count() %>% ungroup() %>%  arrange(desc(n))
+
+test_data %>% filter(str_detect(text,"terrible") & user_type=="USER")
+```
+
+
+```{r}
+#https://research.google/tools/datasets/taskmaster-1/
+#http://convai.io/data/
+
+load(file = "Bkp\\Google_conversation.rda")
+
+
+test_data1 <-  tibble(conv_id = "INITIALIZE_ROW_1",chat_order=9999,user_type="BLANK",text="BLANK" )
+#seq_along(json_data)
+for(i in seq_along(json_data))
+{
+  conv_id <-  json_data[[i]]$conversation_id
+  for(j in seq_along(json_data[[i]]$utterances))
+  {
+    chat_order <-  json_data[[i]]$utterances[[j]]$index
+    user_type <-  json_data[[i]]$utterances[[j]]$speaker
+    text <-  json_data[[i]]$utterances[[j]]$text
+    test_data1 <-  test_data1 %>% add_row(conv_id,chat_order,user_type,text)
+  }
+}
+save(test_data1,file="Bkp\\Google_conversation.rda")
+```
+
+```{r}
+
+
+
+test_data1 <- test_data1 %>% filter(chat_order!=9999)
+
+tidy_data1 <-  test_data1 %>% unnest_tokens(word, text)
+
+nrc <- get_sentiments("nrc")
+bing <- get_sentiments("bing")
+afinn <- get_sentiments("afinn")
+
+
+emotion <- nrc %>% filter(sentiment %in% c("anger") ) 
+emotion <- nrc %>% filter(sentiment %in% c("disgust") )
+emotion <- nrc %>% filter(sentiment %in% c("fear") )
+emotion <- nrc %>% filter(sentiment %in% c("sadness") )
+
+emotion <- nrc %>% filter(sentiment %in% c("negative") )
+
+
+tidy_data1 %>% inner_join(nrc) %>% group_by(sentiment) %>% count() %>% ungroup() %>%  arrange(desc(n))
+
+angry_conv <-  tidy_data1 %>% inner_join(emotion) #%>% group_by(sentiment) %>% count() %>% ungroup() %>%  arrange(desc(n))
+
+
+test_data1 %>% inner_join(angry_conv) %>% filter(user_type=="USER") %>% View()
+
+#anger
+
+test_data1 %>% filter( conv_id == "dlg-03aa0a4e-eb4f-4ef2-9b3e-d638872372a3") %>% View()
+
+test_data1 %>% filter( conv_id == "dlg-0da60408-05e3-4d6e-8dee-e295d5b8316e") %>% View()
+
+```
+
