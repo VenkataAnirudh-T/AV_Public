@@ -1,0 +1,198 @@
+﻿chatid,user,chatorder,text
+1,Robert,1,"Hello, is this apple product support?"
+1,Bot,2,"Yes, it is. How may I help you?"
+1,Robert,3,I have a problem with one of the products that I have purchased at your store
+1,Bot,4,I am sorry for that. Can you please tell which product is it and what is the issue?
+1,Robert,5,"It is an iphone 10, it has been a week about now and the phone has started to overheat."
+1,Bot,6,"I understand the situation and I am glad to assist you with it, can you please share the order id and let me know if you would like to have a return or replacement for it."
+1,Robert,7,My order id is 54569723 and I would like to have a replacement
+1,Bot,8,"A replacement request has been created, please carry the device to the nearest store and our representatives will verify and replace the product."
+1,Robert,9,"Thank you for you help, have a good day"
+1,Bot,10,"You're welcome, have a great day!"
+2,Bot,1,It is a good day today at Bank of Wealth. My name is Heather. How can I he you?
+2,Tracy,2,I would like to know my remaining money in my account.
+2,Bot,3,I’ll be glad to help you. May I please get your Bank Account number  and the Name on the Account?
+2,Tracy,4,"Sure, it is Tracy Q. Randall. Account number is 8051-7845-3895-0611"
+2,Bot,5,Thank you. let me just check on it. Ok. can you please. Verify the last four numbers of your social security ID?
+2,Tracy,6,It is *****.
+2,Bot,7,You still have 84 thousand and 65 cents. Is there anything else that I could assist you with?
+2,Tracy,8,Yes. If transfer I to my bank account in Lloyds of London. how long will take?
+2,Bot,9, If we do the transaction over the phone or online. Our team will still contact you for verification prior to sending your money to a different bank. The whole process usually just takes 2-3 days.
+2,Tracy,10,"I see. never mind. I will just do it after the holidays. Thanks for your help, Heather!"
+2,Bot,11,Agent: You are very much welcome. Ms. Randall! You have a great day and Thank you for calling Bank of Wealth. Good Bye!
+3,Bot,1,"Hello Jones, this is May speaking. How may I assist you today?"
+3,Jones,2,"Hello May, thanks for asking. I have a trouble with my headset. One side of it is not working."
+3,Bot,3,"I can help you with that, can you specify the order number?"
+3,Jones,4,The order number is 1000123365
+3,Bot,5,"I see that this purchase was made an year ago, I am sorry but the warranty on the device has expired."
+3,Jones,6,"Are you serious, I have just purchased this a month ago."
+3,Bot,7,"Sorry Sir, but the system shows the purchase as last January."
+3,Jones,8,"That is very annoying , this is the second time that I am facing a bad experience with your customer support. Can you connect me to your manager?"
+3,Bot,9,Is there anything else you would want me to take a look into?
+3,Jones,10,"This is ridiculous, I said connect me to your manager. I need to get this escalated."
+4,Bot,1,"Hello Mark, how are you doing and how may I help you?"
+4,Mark,2,I had placed an order at your store for an latest version of xbox. Wanted to check on the status of the order.
+4,Bot,3,"Sure, I can take a look for you. Can you please share the order number."
+4,Mark,4,"Why not, it is 8265456366"
+4,Bot,5,"Thank you for that, please give me a minute and I will get back. The order has been dispatched from the warehouse. Currently it is in transit. Would you like to have live updates on your phone as the order moves?"
+4,Mark,6,"Definitely, it’s a good feature that is letting me know where my order is."
+4,Bot,7,"You are all set, you will now get frequent updates as the order reaches our store. If all goes well, the order will reach us by Saturday."
+4,Mark,8,"Wow, that is good new as anticipated. Thank you for you support."
+4,Bot,9,"You are welcome, have a great day!"
+4,Mark,10,You as well!. Thank you contacting Support.
+5,Bot,1,"Hello Henry, How is your day going?"
+5,Henry,2,It is going bad indeed. I forgot my password to the xffinity account and now the system has locked me out. Can you help me get my access back.
+5,Bot,3,"Sure, I am here for you assistance. Before I can reset, can you please confirm your email address and phone number please."
+5,Henry,4,"Yes, my mail address is hellohenry@gmail.com and phone number is 6543215485"
+5,Bot,5,"Great, that sounds good. I have sent an email reset link to you along with instructions to reset the account. Did you receive the email.."
+5,Henry,6,Yes I received your mail and instruction to reset the password. It looks good and perfect.
+5,Bot,7,Is there anything else that I can help you with.
+5,Henry,8,I believe that is all I needed. Thank you for your kind assistance and help. Highly appreciate.
+5,Bot,9,"It is pleasure serving you, have a great day!"
+5,Henry,10,"Thank you, you too!"
+6,Bot,1,"Hello Joe, hope you are having a fine day. How may I help you?"
+6,Joe,2,"Hello, I had purchased a skin cream the other day at your store and it has different smell and feels wierd."
+6,Bot,3,"I am sorry to hear about that, could you share the order number please?"
+6,Joe,4,Yes it is 949040300.
+6,Bot,5,"Thank you, let me quickly lookup. I see it has expired. We are really sorry for the trouble. You may exchange the product and we can also arrange a refund if you like."
+6,Joe,6,I have not particularly called for a refund or exchange. I had accidentally applied the cream and it has caused a serious allergic reaction on my skin. This is not acceptable in any ways.
+6,Bot,7,We sincerely apologize for the mistake made and the harm it has caused. We will process a refund and also would like to offer you a 10$ credit that you may use later.
+6,Joe,8,"This is a really bad service and one not expected from a store like yours. This problem must be taken to the managers notice. Connect me to your manager before other people get harmed, I need to alert higher authorities to immediately stop the sale of those products."
+6,Bot,9,"I understand that this mistake cannot be undone, my heartfelt apologies again. Please wait a minute before I connect to the manager."
+6,Joe,10,"Sure, I will be on the line."
+7,Bot,1,"Hello Jimmy, this is Chap. How may I help you?"
+7,Jimmy,2,I need help with an error when trying to use one of your applications feature.
+7,Bot,3,"Sure, can you please state what the error says?"
+7,Jimmy,4,It says index out of memory and the application crashes.
+7,Bot,5,"Oh, that looks as though your systems RAM is too small for the operation."
+7,Jimmy,6,"At first I did feel the same, but I moved the application onto a remote servers that hve 48Giggs memory. Which seems more the sufficient and I still see the same error."
+7,Bot,7,What is the operation that you are trying to perform?
+7,Jimmy,8,I am trying to export the data on screen to an excel using the excel export button.
+7,Bot,9,That is a rather simple function and should not take much memory. There seems to be a problem with your computer.
+7,Jimmy,10,"NO, the problem is not with my computer. You are wrong, as I have ran it on the server as well, but the issue is still on."
+7,Bot,11,It makes me think there might be a malware attack or issue with excel plugin itself.
+7,Jimmy,12,"I am done with this, at your customer service you keep doing the blame game as usual. Never accept mistakes. This is the second time in a row that I am getting this bad response from you guys. I want to unsubscribe the license and discourage others from using your products for the kind of service you are providing."
+8,Bot,1,"Hello Mike, this is Bot. How can I help you?"
+8,Mike,2,"Hello Bot, I need to replace the automatic irobot home vacuum that I purchased the other day."
+8,Bot,3,"Sure, can you please state why you would want a replacement."
+8,Mike,4,"On its first run, it went straight crashing into the wall without automatically sensing and it now has a crack on the sides."
+8,Bot,5,"Are you sure crack was due to the fault in the vacuum, or was it broken before that?"
+8,Mike,6,"I think it was fine when we purchased, it broke after its's first run"
+8,Bot,7,"I am afraid in that case, there isn’t really much we can do about this. As the product is under manufacturers warrant and not retailer."
+8,Mike,8,I am unhappy with the kind of support I am getting for a premium membership. This is a substandard assistance.
+8,Bot,9,"We apologize, under premium membership, there are policies that need to be followed. Under the circumstance that you have mentioned, we unable to return or refund."
+8,Mike,10,It is very unfair and disappointing.
+9,Bot,1,"Hello, my name is Brian. I'll be happy to help you today."
+9,Jessy,2,I have placed an order and never received it. But it shows as delivered.
+9,Bot,3,I am sorry about the inconvenience. May I have the order number please.
+9,Jessy,4,"Yes , it is 56856523"
+9,Bot,5,Thank you. Allow me a moment please.
+9,Jessy,6,"Of course, take your time"
+9,Bot,7,Is it for G.I. Joe: Cobra Volume 2 (G. I. Joe (Graphic Novels)
+9,Jessy,8,"Yes, you are correct."
+9,Bot,9,"Sorry for the delay, it must have been lost in shipping.I'll just create a new order for this with one day shipping. The replacement order number is 84884225."
+9,Jessy,10,"Great, thank you!"
+9,Bot,11,"I am sorry, Order number is 85162121"
+9,Jessy,12,No worries. thank you again! that was seamless and easy. I'll be sure to make a recommendation on reddit and tell all my friends how nice and easy this went. have a great day.
+9,Bot,13,"You very much welcome, hope you have a great day!"
+10,Bot,1,"Hi James, welcome to Live Chat! My name is Peter. How can I help you today?"
+10,James,2,"Hi, I wanted to check my order status. My order number is 0009483021."
+10,Bot,3,"Great, thanks for the information! Give me one moment please while I check on that for you."
+10,James,4,Thanks. I’m worried it won’t arrive in time for my daughter’s birthday party this weekend.
+10,Bot,5,"I understand your concer. I wouldn’t want any customers gift to arrive late either.It looks like your order is set to arrive in 2 business days, so it should arrive by Friday, just in time! Is there anything else that I can do for you?"
+10,James,6,"Great, thank you! Yes, I also wanted to make sure I entered the right shipping address. My address is 12390 Mulberry Ln, Coral Springs, FL 33067. Is that where it’s being shipped to?"
+10,Bot,7,"No problem, let me check that for you. Yes, I have here the shipping address as 12390 Mulberry Ln, Coral Springs, FL 33067. It looks like you’re good to go!"
+10,James,8,Thanks so much!
+10,Bot,9,Not a problem! Is there anything else I can do for you?
+10,James,10,"Nope, that’s it"
+10,Bot,11,"Great, I’m glad I could help you!! Thanks for being a customer of ToyCityInc. – We hope your daughter has a very happy birthday!"
+10,James,12,I appreciate it!
+11,Bot,1,"Hi Stark , how may I help you?"
+11,Stark,2,I have a query regarding my order
+11,Bot,3,Yes I can help you. Could you please share me your order id 
+11,Stark,4,Yup here is my order Id 123456789
+11,Bot,5,give me a moment I will have your details up on the screen.
+11,Bot,6,here it goes am able see the order placed on may 1st.
+11,Bot,7,So may I know whats the query about?
+11,Stark,8,in the  same order I have added 2 lb of tomatoes.
+11,Stark,9,when I received the order today from the looks of it I see that they are going to rott in next 1 or 2 days 
+11,Stark,10,It is quite annoying when you send low quality products in general when I make a online delivery order
+11,Bot,11,We sincerely appologise for the inconvinence caused.
+11,Bot,12,I could give you refund in two ways. Would you like the credit in your insta account or your original payment mode
+11,Stark,13,I would like to have it refund back to my bank account. 
+11,Stark,14,I would certainly like to see an improvement in the next order
+11,Bot,15,We will take this incident to the concerned official and make sure to improve the next time.
+11,Bot,16,Is there anything else I could help you with?
+11,Stark,17,"Yes , There is also another problem with the order. I see that I have received two shampoos where as I added only one to my cart. "
+11,Stark,18,I would like to return it back and would want a refund on that as well.
+11,Bot,19,But on my screen it shows that you have placed 2 quantites of shampoo.
+11,Bot,20,I am afraid I cannot initiate the process of refund on this product. You would have to manually go to the store and return in the store.
+11,Stark,21,I ordered only one shampoo but got two I don’t know why. I suppose there is some issue with the system and its not my mistake.
+11,Stark,22,I don’t have any stores near by that’s the reason I placed order for online delivery
+11,Stark,23,"it also disappoints me because of the kind of impression it leaves, being my first order."
+11,Bot,24,I am really sorry but we are helpless. Would you want to get in touch with my store manager and explain him. 
+11,Stark,25,Will that be of any help? Or will it also be a lost cause because I have to talk to him and explain him  the entire scenario. Which I feel is frustrating.
+11,Bot,26,I am sure he will be able to help you with your problem.
+11,Stark,27,Alright go ahead connect me with him
+12,Bot,1,How can I help you today
+12,Tony,2,"Someone created an account using my gmail account but with a ""."" in it. This is still associate with my email address and is not my account. How can I delete this account?"
+12,Tony,3,my name is not brittni.. my name is chris williams. my actual account is ctwilliXXXXX@gmail.com
+12,Tony,4,this other account was created using ct.williXXXXX@gmail.com
+12,Tony,5,i believe it is some sort of phishing attempt but I don't want this account associate with my email.
+12,Tony,6,hello?
+12,Bot,7,Im just here..but before we proceed let me check your account for security purposes okay?
+12,Bot,8,mAY i KNOW THE ACCOUNT HOLDER PLEASE
+12,Tony,9,ok. my real account is ctwilliXXXXX@gmail.com NOT ct.williXXXXX@gmail.com - i had to password reset in order to get this account. Chris Williams
+12,Bot,10,May I know the account holder please..
+12,Tony,11,Account holder is Chris Williams
+12,Bot,12,your first and last name plese
+12,Tony,13,First = Chris Last = Williams
+12,Bot,14,okay let me check this out for you okay?
+12,Bot,15,one moment plese
+12,Bot,16,yah..im just here..Im so sorry for taking a long time to wait on this okay..?
+12,Bot,17,ctwilliXXXXX@gmail.com ..this one is your account am I correct on this?
+12,Tony,18,yes... ctwilliXXXXX@gmail.com is my account.
+12,Bot,19,okay..Il reset your password..just check the link on it..so you can have your new password okay?
+12,Tony,20,i don't need you to reset my password
+12,Bot,21,OH OKAY..I ask an apology for that one..
+12,Tony,22,"i need you to delete this ""ct.williXXXXX@gmail.com"" account because it is not mine."
+12,Tony,23,please don't change my password.
+12,Bot,24,ah yah sure..I'm not going to change your Password maam..
+12,Tony,25,maam?
+12,Tony,26,what is going on here?
+12,Bot,27,oh so sorry to call you Maam..Its okay..I got mis information in here..but let me handle this for you..
+12,Tony,28,"can you delete the account ""ct.williXXXXX@gmail.com"" or not?"
+12,Bot,29,okay..please give me another moment again..
+12,Bot,30,okay?
+12,Tony,31,ok.
+12,Tony,32,do you understand the problem i am having or is this a lost cause?
+12,Tony,33,can you please just let me know if this is a problem you can help resolve?
+12,Bot,34,"I recommend that you delete the e-mail. For your protection, do not respond to it, and do not open any attachments or click any links it contains okay?"
+12,Tony,35,delete my email?
+12,Tony,36,did you say delete my email?
+12,Tony,37,hello?
+12,Tony,38,?????
+12,Bot,39,one moment please let me check it further for you..
+12,Tony,40,ONE MOMENT? NOT SURE WHAT YOUR DEFINITION OF A MOMENT IS BUT THIS HAS BEEN GOING ON FOR A LONG TIME AND YOU OBVIOUSLY HAVE NO IDEA WHAT YOU ARE DOING.
+12,Tony,41,THIS IS RIDICULOUS!
+12,Tony,42,1. YOU CAN'T SPELL 2. YOU AREN'T LISTENING TO MY PROBLEM 3. YOU KEEP ASKING ME TO WAIT A MOMENT (10 MINUTES EACH TIME) 4. YOU SUGGEST I DELETE MY EMAIL (HOW THE HELL DOES THAT HELP?) 5. YOU ARE VERY UNHELPFUL.
+12,Tony,43,I FEEL LIKE I'M BEING PRANKED HERE.
+12,Tony,44,I WILL ASK ONE LAST TIME....
+12,Tony,45,CAN YOU DELETE THIS ACCOUNT OR NOT? SIMPLE QUESTION.
+12,Bot,46,okay..i will refer you to our account specialist do this account you want to be deleted okay..
+12,Tony,47,READ WHAT YOU JUST TYPED. IT DOESN'T MAKE SENSE.
+12,Bot,48,I am really so sorry about this inconvenience that you experienced but our account specialist will handle this for you okay?
+12,Tony,49,YES PLEASE PUT ME IN TOUCH WITH SOMEONE... ANYONE.
+12,Bot,50,okay..i will refer you to our account specialist do this account you want to be deleted okay..this text is a mistake so sorry for this..
+12,Tony,51,WHAT THE ----
+12,Bot,52,What I'm trying to say here is I will refer you to our account specialist..so it will be deleted the one that you want to SO SORRY really for this..
+12,Bot,53,I hope you can forgive my fault in here
+12,Tony,54,CAN YOU PLEASE CONNECT ME WITH AN ACCOUNT SPECIALIST.
+12,Bot,55,I am really Sorry for this..yes sure I will..
+12,Bot,56,I will ask first an apology for this please..I am so sorry Brittni..let me connect you now to our account specialist okay?
+12,Tony,57,CHRIS MY NAME IS CHRIS I HAVE TOLD YOU THAT AT LEAST 6 TIMES.
+12,Tony,58,CONNECT ME TO SOMEONE ELSE NOW
+12,Tony,59,I WILL NOT APOLOGIZE TO YOU.
+12,Tony,60,ARE YOU TRANSFERRING ME OR NOT?
+12,Bot,61,May I have your phone number please?
+12,Tony,62,I AM POSTING THIS CONVERSATION ONLINE. THIS IS UNBELIEVABLE. WORST CUSTOMER SERVICE I HAVE EVER EXPERIENCED

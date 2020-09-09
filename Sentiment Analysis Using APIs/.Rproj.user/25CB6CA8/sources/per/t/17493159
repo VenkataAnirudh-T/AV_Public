@@ -1,0 +1,24 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1594089537350.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "4218356845",
+    "id" : "17493159",
+    "lastKnownWriteTime" : 1586029973,
+    "last_content_update" : 1586029973,
+    "path" : "D:/665/Project/665_Project/12RStudio_ Regression.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "chunk_output_type" : "console"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 7,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

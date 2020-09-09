@@ -1,0 +1,33 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1594786336292.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "F1B40C8F",
+    "lastKnownWriteTime" : 8026363914660965410,
+    "last_content_update" : 1594786336292,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "3F0B55E1",
+        "caption" : "document_detail_ibm_tbl1",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=document_detail_ibm_tbl1&cache_key=3F0B55E1",
+        "displayedObservations" : 208,
+        "environment" : "",
+        "expression" : "document_detail_ibm_tbl1",
+        "object" : "document_detail_ibm_tbl1",
+        "preview" : 0,
+        "totalObservations" : 208,
+        "variables" : 5
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 9,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

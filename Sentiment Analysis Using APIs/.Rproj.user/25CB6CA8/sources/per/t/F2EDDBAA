@@ -1,0 +1,28 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1596477741175.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "65649420",
+    "id" : "F2EDDBAA",
+    "lastKnownWriteTime" : 1596478714,
+    "last_content_update" : 1596478714501,
+    "path" : "D:/Projects/665/API TESTER/API Calls V10.Rmd",
+    "project_path" : "API Calls V10.Rmd",
+    "properties" : {
+        "chunk_output_type" : "console",
+        "cursorPosition" : "1164,0",
+        "last_setup_crc32" : "",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 13,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

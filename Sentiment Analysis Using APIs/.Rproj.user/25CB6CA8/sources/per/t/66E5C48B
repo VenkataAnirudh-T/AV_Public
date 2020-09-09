@@ -1,0 +1,33 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1594094656972.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "66E5C48B",
+    "lastKnownWriteTime" : 1594004805,
+    "last_content_update" : 1594094656972,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "8131FAD3",
+        "caption" : "sentenct_pd",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=sentenct_pd&cache_key=8131FAD3",
+        "displayedObservations" : 104,
+        "environment" : "",
+        "expression" : "sentenct_pd",
+        "object" : "sentenct_pd",
+        "preview" : 0,
+        "totalObservations" : 104,
+        "variables" : 3
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 8,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

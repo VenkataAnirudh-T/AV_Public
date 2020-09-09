@@ -1,0 +1,1164 @@
+---
+title: "Test API"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# LOAD LIBRARIES
+```{r}
+#install.packages("unpivotr")
+library(tidyverse) 
+library(httr)
+library(jsonlite)
+library(tidyverse)
+library(dplyr)
+library(tidytext)
+library(ggplot2)
+library(unpivotr)
+library(randomForest)
+library(corrplot)
+library(corrr)
+library(caret)
+library(irr)
+library(modelr)
+library(shiny)
+library(shinydashboard)
+library(plotly)
+library(tidytext)
+library(wordcloud)
+```
+
+# CONFIG
+```{r}
+ImportData <- F
+MakeIBMAPICalls <- F
+MakeMSAPICalls <- F
+MakePDAPICalls <- F
+DisplayOverallGraphs <- F
+LoadBenchMarkData <- F
+DisplayOverallChatConfusionMatrix <- F
+DisplaySentenceLvlConfusionMatrix <- F
+SentenceLvlRandomForest <- F # DEPENDS ON DisplaySentenceLvlConfusionMatrix
+DisplayAPISentimentCorrelation <- F
+PerformIRR <- F
+AngerHappinessRandomForest <- F
+SaveAggregatedResult <- F
+LoadAggregatedResult <- F
+Tokenise_IDF <- F
+FromUIData <- F
+SaveAggregatedResult <- F
+LoadAggregatedResult <- F
+```
+
+
+
+# Load Data
+```{r}
+if (ImportData) {
+#Import
+actual_data <- read.csv("controlset.csv",encoding = "UTF-8")
+
+#Load to tibble
+actual_data <-  as.tibble(actual_data)
+
+#Clean Up
+actual_data <- actual_data %>% rename(chatid=`X.U.FEFF.chatid`) %>% mutate(user=as.character(user),text=as.character(text))
+
+#Filter User Only Data
+actual_data_user <- actual_data %>% filter(user != "Bot") %>% arrange(chatid,chatorder)
+}
+```
+
+# IBM TONE ANALYZER API CALLS : LOAD IBM API DATA
+```{r}
+if (MakeIBMAPICalls) {
+  chat_ids <- actual_data %>% distinct(chatid)
+
+error <- NULL
+log <- NULL
+sentence_detail_ibm_tbl <- NULL
+document_detail_ibm_tbl <- NULL
+
+for(chat_id in unlist(chat_ids))
+{
+  log <- paste(log,chat_id,";")
+  temp_chat <- actual_data %>% ungroup() %>% filter(chatid==chat_id)  %>% select(text)
+  conv <- paste( unlist(temp_chat), collapse='')
+  conv <- conv %>% tolower()
+  res <-  GET("https://api.us-south.tone-analyzer.watson.cloud.ibm.com/instances/ae35ff46-9c62-4702-8fac-7436e439e518/v3/tone",
+    authenticate("apikey" ,"b47XSqEVQz2waukJGTjlVXwbzJjyxZ2YHeBqQFFi0Aql"),
+    query = list(version="2017-09-21",
+                 text=conv),
+    accept_json())
+  if(res$status_code == 200)
+  {
+    output <-  content(res)
+    document_details <- output$document_tone$tones
+    if(!is.null(document_details))
+    {
+      temp_document_tbl <- tibble(chatid = chat_id)  %>%  crossing(bind_rows(document_details))
+      document_detail_ibm_tbl <- document_detail_ibm_tbl %>% rbind(temp_document_tbl)
+    }
+    sentence_details <- output$sentences_tone
+    if(!is.null(sentence_details))
+    {
+      for(sentence in c(1:length(sentence_details)) )
+      {
+        temp_sentence_tbl <- tibble(chatid = chat_id,sentenceid=sentence_details[[sentence]]$sentence_id,
+                text=sentence_details[[sentence]]$text) %>%  crossing(bind_rows(sentence_details[[sentence]]$tones))
+        sentence_detail_ibm_tbl <- sentence_detail_ibm_tbl %>% rbind(temp_sentence_tbl)
+      }
+    }
+  }
+  else
+  {
+    error <- paste(error,chat_id,"=",res$status_code,";")
+  }
+}
+
+document_detail_ibm_tbl
+sentence_detail_ibm_tbl
+}
+
+#Test loaded data on graphs
+if (F) {
+  document_detail_ibm_tbl %>% mutate(chat_id=as.factor(chatid)) %>% 
+  #filter(!(tone_name %in% c("Tentative","Analytical","Confident"))) %>% 
+  ggplot(aes(x=tone_name,y=score,fill=tone_name)) + geom_col() + facet_wrap(~chat_id)
+
+sentence_detail_ibm_tbl %>% 
+  #filter(!(tone_name %in% c("Tentative","Analytical","Confident"))) %>% 
+  mutate(chatid=as.factor(chatid)) %>% 
+  group_by(chatid,tone_name) %>% 
+  summarise(value=sum(score)) %>% ungroup() %>% ggplot() + geom_col(aes(x=chatid,y=value,fill=tone_name))
+
+sentence_detail_ibm_tbl %>% 
+  filter(chatid==12) %>% 
+  #filter(!(tone_name %in% c("Tentative","Analytical","Confident"))) %>% 
+  ggplot(aes(x=sentenceid,y=score,color=tone_name))+ geom_line() +geom_point() + facet_wrap(~tone_name)
+}
+```
+
+# IBM TONE ANALYZER API CALLS : LOAD IBM API DATA (ONE SENTENCE AT A TIME)
+```{r}
+if (MakeIBMAPICalls) {
+error <- NULL
+log <- NULL
+sentence_detail_ibm_tbl1 <- NULL
+document_detail_ibm_tbl1 <- NULL
+    
+for(chat_id in unlist(distinct(actual_data,chatid)))
+{
+  for(chat_order in unlist(distinct(actual_data %>% filter(chatid==chat_id),chatorder)))
+  {
+    print(paste(chat_id,chat_order))
+    conv <- actual_data %>% filter(chatid==chat_id,chatorder==chat_order) %>% mutate(text=as.character(text)) %>%  select(text)
+    res <-  GET("https://api.us-south.tone-analyzer.watson.cloud.ibm.com/instances/ae35ff46-9c62-4702-8fac-7436e439e518/v3/tone",
+    authenticate("apikey" ,"b47XSqEVQz2waukJGTjlVXwbzJjyxZ2YHeBqQFFi0Aql"),
+    query = list(version="2017-09-21",
+                 text=conv),
+    accept_json())
+    if(res$status_code == 200)
+    {
+      output1 <-  content(res)
+      document_details <- output1$document_tone$tones
+      if(!is.null(document_details))
+      {
+        temp_document_tbl <- tibble(chatid = chat_id,chatorder=chat_order)  %>%  crossing(bind_rows(document_details))
+        document_detail_ibm_tbl1 <- document_detail_ibm_tbl1 %>% rbind(temp_document_tbl)
+      }
+      sentence_details <- output1$sentences_tone
+      if(!is.null(sentence_details))
+      {
+        for(sentence in c(1:length(sentence_details)) )
+        {
+          temp_sentence_tbl <- tibble(chatid = chat_id,chatorder=chat_order,sentenceid=sentence_details[[sentence]]$sentence_id,
+                  text=sentence_details[[sentence]]$text) %>%  crossing(bind_rows(sentence_details[[sentence]]$tones))
+          sentence_detail_ibm_tbl1 <- sentence_detail_ibm_tbl1 %>% rbind(temp_sentence_tbl)
+        }
+      }
+    }
+    else
+    {
+      error <- paste(error,chat_id,"=",res$status_code,";")
+    }
+
+  }
+}
+
+#Test loaded data on graphs
+document_detail_ibm_tbl1
+sentence_detail_ibm_tbl1
+
+sentence_detail_ibm_tbl1 <-sentence_detail_ibm_tbl1 %>%  inner_join(actual_data %>% select(chatid,chatorder,user),by = c("chatid"="chatid","chatorder"="chatorder"))
+
+document_detail_ibm_tbl_pref <- sentence_detail_ibm_tbl1 %>% select(-tone_id) %>% 
+  pivot_wider(names_from = tone_name,values_from = score ) %>% 
+  replace(.,is.na(.),0) %>% 
+  group_by(chatid,user) %>% 
+  summarise(Analytical=sum(Analytical), Sadness=sum(Sadness), Confident=sum(Confident),   Joy=sum(Joy), Tentative=sum(Tentative), Anger=sum(Anger),  Fear=sum(Fear)) %>% ungroup()
+
+}
+```
+
+# MS - TEXT ANALYZER API CALLS : LOAD Microsoft API DATA 
+```{r}
+if (MakeMSAPICalls) {
+  jsn <-  actual_data   %>% mutate(id=paste(chatid,chatorder,sep = "_")) %>%  select(id,text) %>%  nest(data=c(id,text)) %>% rename(documents=data)  %>% toJSON()
+ 
+jsn1 <- gsub('\\[\\{\\"d','{"d',jsn)
+jsn2 <- gsub('\\}\\]\\}\\]','}]}',jsn1)
+jsn3 <- gsub('\\\\\"','heyyyy',jsn2) # removing \" from json
+
+auth_header <- httr::add_headers('Ocp-Apim-Subscription-Key'='3247f835c0e1475ca35a25e21c200e88')
+res <-  POST("https://eastus.api.cognitive.microsoft.com/text/analytics/v3.0-preview.1/sentiment/",
+    auth_header,
+    encode ="raw",
+    body = jsn3)
+
+
+output2 <- content(res) 
+
+sentence_detail_ms_tbl <- NULL
+
+for(docid in c(1:length(output2$documents)))
+{
+  document_detail_temp <- tibble(id=output2$documents[[docid]]$id,
+                                 overall_sentiment=output2$documents[[docid]]$sentiment,
+                                 ) %>% crossing(bind_rows(output2$documents[[docid]]$documentScores))
+  sentence_detail_ms_tbl <- sentence_detail_ms_tbl %>% rbind(document_detail_temp)
+}
+
+sentence_detail_ms_tbl <- sentence_detail_ms_tbl %>% separate(id,into = c("chatid","sentenceid")) %>% mutate(chatid=as.numeric(chatid),chatorder=as.numeric(sentenceid)) %>% select(-sentenceid) %>% inner_join(actual_data %>% select(chatid,chatorder,user),by = c("chatid"="chatid","chatorder"="chatorder"))
+
+document_detail_ms_tbl <- sentence_detail_ms_tbl %>% group_by(chatid) %>% summarise(positive=sum(positive),neutral=sum(neutral),negative=sum(negative))
+
+sentence_detail_ms_tbl
+document_detail_ms_tbl
+
+}
+
+#Test loaded data on graphs
+if (F) {
+  sentence_detail_ms_tbl %>% inner_join(actual_data,by = c("chatid"="chatid","chatorder"="chatorder")) %>% select(chatid,chatorder,text,overall_sentiment,positive,neutral,negative)
+
+sentence_detail_ms_tbl %>% 
+  pivot_longer(cols = c(positive,neutral,negative),names_to = "Sentiment") %>% 
+  filter(chatid==12) %>% 
+  ggplot(aes(x=chatorder,y=value,color=Sentiment)) +
+  geom_line()+
+  facet_wrap(~Sentiment)
+
+
+
+document_detail_ms_tbl %>% mutate(chatid=as.factor(chatid)) %>% pivot_longer(cols = c(positive,neutral,negative),names_to = "Sentiment") %>% ggplot() + geom_col(aes(x=chatid,y=value,fill=Sentiment))
+
+document_detail_ms_tbl %>% pivot_longer(cols = c(positive,neutral,negative),names_to = "Sentiment") %>% group_by(chatid) %>% arrange(chatid,desc(value)) %>% top_n(1) %>% ungroup() %>% arrange(Sentiment)
+}
+```
+
+# PARALLEL DOT API CALL : LOAD Paralle Dots API DATA 
+```{r}
+if (MakePDAPICalls) {
+  chat_ids <- actual_data %>% distinct(chatid) 
+error <- NULL
+sentence_detail_pd_tbl <- NULL
+data_used <- actual_data %>%  filter((length(text)>0))  %>% group_by(chatid) %>%  mutate(idx=row_number()) %>% ungroup()
+
+for(chat_id in unlist(chat_ids))
+{
+  array_tibble <- data_used %>% filter(chatid==chat_id) %>%  arrange(idx) %>%  select(text) %>% mutate(text=gsub('"', '', text)) %>%  mutate(text=paste('"',text,'"')) 
+  input_array <-   paste( unlist(array_tibble), collapse=',')
+  input_array <-  paste("[",input_array,"]")
+  form_body <- list(text=input_array,
+                  api_key="eAWtYDkAFSnBPGtGsaUbXUt8riNE3ra42PKVZVbazVc")
+  if(chat_id %in% c(3,6,9,10,11,12))
+  {
+    Sys.sleep(60)
+  }
+  res <-  POST("https://apis.paralleldots.com/v4/emotion_batch",
+    encode = "form",
+    body = form_body)
+  if (res$status_code == 200) 
+    {
+      output3 <- content(res)
+      for (sentence in c(1:length(output3$emotion))) 
+        {
+          sentence_detail_temp <- tibble(happy = output3$emotion[[sentence]]$Happy,
+                                 bored = output3$emotion[[sentence]]$Bored,
+                                 sad = output3$emotion[[sentence]]$Sad,
+                                 excited = output3$emotion[[sentence]]$Excited,
+                                 fear = output3$emotion[[sentence]]$Fear,
+                                 angry = output3$emotion[[sentence]]$Angry,
+                                 idx=sentence,
+                                 chatid=chat_id
+                                 )
+          sentence_detail_pd_tbl <- sentence_detail_pd_tbl %>% rbind(sentence_detail_temp)
+      }
+      print(chat_id)
+    }
+  else
+    {
+      error <- paste(error,chat_id,"=",res$status_code,";")
+    }
+}
+
+sentence_detail_pd_tbl <- 
+  data_used %>% inner_join(sentence_detail_pd_tbl,by = c("idx"="idx","chatid"="chatid"))
+}
+ 
+#Test loaded data on graphs
+if (F) {
+  sentence_detail_pd_tbl %>% filter(chatid==12) %>%  
+  pivot_longer(cols = c("happy","bored","sad","excited","fear","angry")) %>% 
+  ggplot(aes(x=chatorder,y=value,color=name))+
+  geom_line()+
+  geom_point()+
+  facet_wrap(~name)
+
+sentence_detail_pd_tbl %>% pivot_longer(cols = c("happy","bored","sad","excited","fear","angry")) %>% 
+  mutate(chatid=as.factor(chatid)) %>% 
+  group_by(chatid,name) %>% 
+  summarise(value=sum(value)) %>% 
+  ggplot()+
+  geom_col(aes(x=chatid,y=value,fill=name))
+}
+
+```
+# OVERALL GRAPHS
+```{r}
+if (DisplayOverallGraphs) {
+  sentence_detail_pd_tbl %>% 
+  filter(user!="Bot") %>% 
+  group_by(chatid) %>% 
+  summarise(happy=sum(happy),sad=sum(sad),fear=sum(fear),angry=sum(angry),bored=sum(bored),excited=sum(excited)) %>%  #"happy","bored","sad","excited","fear","angry"
+  mutate(tot=happy+sad+fear+angry+bored+excited) %>% #for percent
+  ungroup() %>% 
+  pivot_longer(cols = c("happy","sad","fear","angry","excited","bored")) %>% 
+  mutate(value=value/tot) %>%  #for percent
+  mutate(truth=if_else(chatid %in% c(1,2,4),"nuetral",ifelse(chatid %in% c(5,9,10),"happy","angry"))) %>% 
+  mutate(truth_int=if_else(chatid %in% c(1,2,4),2,ifelse(chatid %in% c(5,9,10),1,3))) %>%
+  mutate(name = factor(name,levels = c("angry","sad","fear","happy","excited","bored"))) %>% 
+  ggplot(aes(x=reorder(chatid,truth_int),y=value,fill=name,label=round(value,2)))+
+  geom_col()+
+  geom_text(size = 4, position = position_stack(vjust = 0.5))+
+  geom_text(aes(x=reorder(chatid,truth_int),y=1,label=truth))+
+  ggtitle('PARALLEL DOTS : OVERALL CHAT EMOTIONS - USER')+
+  coord_flip()
+
+sentence_detail_pd_tbl %>% 
+  filter(user!="Bot") %>% 
+  group_by(chatid) %>% 
+  summarise(happy=sum(happy),sad=sum(sad),fear=sum(fear),angry=sum(angry)) %>%  #"happy","bored","sad","excited","fear","angry"
+  mutate(tot=happy+sad+fear+angry) %>% #for percent
+  ungroup() %>% 
+  pivot_longer(cols = c("happy","sad","fear","angry")) %>% 
+  mutate(value=value/tot) %>%  #for percent
+  mutate(truth=if_else(chatid %in% c(1,2,4),"nuetral",ifelse(chatid %in% c(5,9,10),"happy","angry"))) %>% 
+  mutate(truth_int=if_else(chatid %in% c(1,2,4),2,ifelse(chatid %in% c(5,9,10),1,3))) %>%
+  mutate(name = factor(name,levels = c("angry","sad","fear","happy"))) %>% 
+  ggplot(aes(x=reorder(chatid,truth_int),y=value,fill=name,label=round(value,2)))+
+  geom_col()+
+  geom_text(size = 4, position = position_stack(vjust = 0.5))+
+  geom_text(aes(x=reorder(chatid,truth_int),y=1,label=truth))+
+  ggtitle('PARALLEL DOTS : OVERALL CHAT EMOTIONS[4 Main Emotions]- USER')+
+  coord_flip()
+
+sentence_detail_pd_tbl %>% filter(chatid==11,user!="Bot") %>%  
+  pivot_longer(cols = c("happy","bored","sad","excited","fear","angry")) %>% 
+  ggplot(aes(x=chatorder,y=value,color=name))+
+  geom_line()+
+  geom_point()+
+  facet_wrap(~name)+
+  ggtitle('PARALLEL DOTS : CROSS CHAT EMOTION VARIATION- USER')
+
+document_detail_ms_tbl %>%   mutate(chatid=as.factor(chatid),tot=positive+negative+neutral) %>%
+  pivot_longer(cols = c(positive,neutral,negative),names_to = "Sentiment") %>% 
+  mutate(value=value/tot) %>% 
+  mutate(truth=if_else(chatid %in% c(1,2,4),"nuetral",ifelse(chatid %in% c(5,9,10),"happy","angry"))) %>% 
+  mutate(truth_int=if_else(chatid %in% c(1,2,4),2,ifelse(chatid %in% c(5,9,10),1,3))) %>% 
+  ggplot(aes(x=reorder(chatid,truth_int),y=value,fill=Sentiment,label=round(value,2))) + geom_col()+
+  geom_text(size = 4, position = position_stack(vjust = 0.5))+
+  geom_text(aes(x=reorder(chatid,truth_int),y=1.2,label=truth))+
+  ggtitle('MS - TEXT ANALYZER : OVERALL CHAT EMOTIONS -ALL')+
+  coord_flip()
+
+document_detail_ms_tbl  %>%  mutate(chatid=as.factor(chatid),tot=positive+negative) %>%
+  pivot_longer(cols = c(positive,negative),names_to = "Sentiment") %>% 
+  mutate(value=value/tot) %>% 
+  mutate(truth=if_else(chatid %in% c(1,2,4),"nuetral",ifelse(chatid %in% c(5,9,10),"happy","angry"))) %>% 
+  mutate(truth_int=if_else(chatid %in% c(1,2,4),2,ifelse(chatid %in% c(5,9,10),1,3))) %>% 
+  ggplot(aes(x=reorder(chatid,truth_int),y=value,fill=Sentiment,label=round(value,2))) + geom_col()+
+  geom_text(size = 4, position = position_stack(vjust = 0.5))+
+  geom_text(aes(x=reorder(chatid,truth_int),y=1.2,label=truth))+
+  ggtitle('MS - TEXT ANALYZER : OVERALL CHAT EMOTIONS[2 Main Sentiments]-ALL')+
+  coord_flip()
+
+sentence_detail_ms_tbl %>% 
+  pivot_longer(cols = c(positive,neutral,negative),names_to = "Sentiment") %>% 
+  filter(chatid==11) %>% 
+  ggplot(aes(x=chatorder,y=value,color=Sentiment)) +
+  geom_line()+
+  facet_wrap(~Sentiment) +
+  ggtitle('MS - TEXT ANALYZER : CROSS CHAT EMOTION VARIATION-ALL')
+
+
+document_detail_ibm_tbl %>% mutate(chatid=as.factor(chatid)) %>% 
+  filter(tone_name %in% c("Anger","Joy","Sadness","Tentative","Confident","Analytical")) %>%  #"Anger","Joy","Sadness","Tentative","Confident","Analytical"
+  mutate(truth=if_else(chatid %in% c(1,2,4),"nuetral",ifelse(chatid %in% c(5,9,10),"happy","angry"))) %>% 
+  mutate(truth_int=if_else(chatid %in% c(1,2,4),2,ifelse(chatid %in% c(5,9,10),1,3))) %>% 
+  mutate(tone_name = factor(tone_name,levels = c("Anger","Joy","Sadness","Tentative","Confident","Analytical"))) %>% 
+  ggplot(aes(x=reorder(chatid,truth_int),y=score,fill=tone_name,label=round(score,2))) + geom_col() +
+  geom_text(size = 4, position = position_stack(vjust = 0.5))+
+  geom_text(aes(x=reorder(chatid,truth_int),y=3,label=truth))+
+  ggtitle('IBM - TONE ANALYZER : OVERALL CHAT EMOTIONS-ALL')+
+  coord_flip()
+
+
+document_detail_ibm_tbl_pref %>% 
+  filter(user!="Bot") %>% 
+  mutate(tot=Analytical +Sadness+ Confident+Joy+ Tentative+ Anger+Fear) %>% 
+  pivot_longer(cols = c("Anger","Joy","Sadness","Tentative","Confident","Analytical","Fear")) %>% 
+  mutate(value = value/tot) %>% 
+  mutate(truth=if_else(chatid %in% c(1,2,4),"nuetral",ifelse(chatid %in% c(5,9,10),"happy","angry"))) %>% 
+  mutate(truth_int=if_else(chatid %in% c(1,2,4),2,ifelse(chatid %in% c(5,9,10),1,3))) %>% 
+  mutate(name = factor(name,levels = c("Anger","Sadness","Fear","Joy","Tentative","Confident","Analytical"))) %>% 
+  ggplot(aes(x=reorder(chatid,truth_int),y=value,fill=name,label=round(value,2))) + geom_col() +
+  geom_text(size = 4, position = position_stack(vjust = 0.5))+
+  geom_text(aes(x=reorder(chatid,truth_int),y=1.1,label=truth))+
+  ggtitle('IBM - TONE ANALYZER : OVERALL CHAT EMOTIONS-USER')+
+  coord_flip()
+
+document_detail_ibm_tbl_pref %>% 
+  filter(user!="Bot") %>% 
+  mutate(tot=Sadness+Joy+ Anger+Fear) %>% 
+  pivot_longer(cols = c("Anger","Joy","Sadness","Fear")) %>% 
+  mutate(value = value/tot) %>% 
+  mutate(truth=if_else(chatid %in% c(1,2,4),"nuetral",ifelse(chatid %in% c(5,9,10),"happy","angry"))) %>% 
+  mutate(truth_int=if_else(chatid %in% c(1,2,4),2,ifelse(chatid %in% c(5,9,10),1,3))) %>% 
+  mutate(name = factor(name,levels = c("Anger","Sadness","Fear","Joy"))) %>% 
+  ggplot(aes(x=reorder(chatid,truth_int),y=value,fill=name,label=round(value,2))) + geom_col() +
+  geom_text(size = 4, position = position_stack(vjust = 0.5))+
+  geom_text(aes(x=reorder(chatid,truth_int),y=1.1,label=truth))+
+  ggtitle('IBM - TONE ANALYZER : OVERALL CHAT[4 Main Emotions]-USER')+
+  coord_flip()
+
+
+sentence_detail_ibm_tbl1 %>% 
+  filter(chatid==10) %>% 
+  ggplot(aes(x=chatorder,y=score,color=tone_name))+ geom_line() +geom_point() + facet_wrap(~tone_name) +
+  ggtitle('IBM - TONE ANALYZER : CROSS CHAT EMOTION VARIATION-ALL')
+}
+```
+# Load BenchMark Data
+```{r}
+if (LoadBenchMarkData) {
+  actual_PD <- read.csv("ParallelBenchMark.csv",encoding = "UTF-8")
+actual_PD <- actual_PD %>% rename(chatid=`X.U.FEFF.chatid`)
+actual_MS <- read.csv("MSBenchMark.csv",encoding = "UTF-8")
+actual_MS <- actual_MS %>% rename(chatid=`X.U.FEFF.chatid`)
+actual_IBM <- read.csv("IBMBenchMark.csv",encoding = "UTF-8")
+actual_IBM <- actual_IBM %>% rename(chatid=`X.U.FEFF.chatid`)
+actual_All <- read.csv("AllBenchMark.csv",encoding = "UTF-8")
+actual_All <- actual_All %>% rename(chatid=`X.U.FEFF.chatid`)
+actual_AH <- read.csv("BenchMarkAngerHappy.csv",encoding = "UTF-8")
+actual_AH <- actual_AH %>% rename(chatid=`X.U.FEFF.chatid`)
+actual_IRR <- read.csv("IRR.csv",encoding = "UTF-8")
+actual_IRR <- actual_IRR %>% rename(chatid=`X.U.FEFF.chatid`)
+}
+
+# Test Loaded Data
+if (F) {
+  actual_PD %>%
+  filter(user!="Bot") %>% 
+  group_by(chatid) %>% 
+  select(-chatorder,-user,-text) %>% 
+  rename(angry=ANGRY,sad=SAD,fear=FEAR,happy=HAPPY,excited=EXCITED,bored=BORED) %>%  
+  summarise_all(sum) %>% 
+  #select(-excited,-bored) %>%  #"happy","bored","sad","excited","fear","angry"
+  mutate(tot=happy+sad+fear+angry+bored+excited) %>% #for percent
+  pivot_longer(cols = c("happy","sad","fear","angry","bored","excited")) %>% 
+  mutate(value=value/tot) %>%  #for percent
+  replace(.,is.na(.),0) %>% 
+  group_by(chatid,name) %>% 
+  summarise(value=mean(value)) %>% 
+  mutate(truth=if_else(chatid %in% c(1,2,4),"nuetral",ifelse(chatid %in% c(5,9,10),"happy","angry"))) %>% 
+  mutate(truth_int=if_else(chatid %in% c(1,2,4),2,ifelse(chatid %in% c(5,9,10),1,3))) %>% 
+  ungroup() %>% 
+  mutate(name = factor(name,levels = c("angry","sad","fear","happy","bored","excited"))) %>% 
+  ggplot(aes(x=reorder(chatid,truth_int),y=value,fill=name,label=round(value,2)))+
+  geom_col()+
+  geom_text(size = 4, position = position_stack(vjust = 0.5))+
+  geom_text(aes(x=reorder(chatid,truth_int),y=1.1,label=truth))+
+  ggtitle('REAL EMOTION(PD) : OVERALL CHAT-USER')+
+  coord_flip()
+}
+```
+
+# OverAll Chat Confusion Matrix
+```{r}
+if (DisplayOverallChatConfusionMatrix) {
+  # Parallel Dots Overall Chat Confusion Matrix
+
+PD_T <-  actual_PD %>% filter(user != "Bot") %>% group_by(chatid) %>% summarise(ANGRY=sum(ANGRY),SAD=sum(SAD), FEAR=sum(FEAR), BORED=sum(BORED), EXCITED=sum(EXCITED), HAPPY=sum(HAPPY))  %>% pivot_longer(cols = c("ANGRY","SAD","FEAR","BORED","EXCITED","HAPPY")) %>% group_by(chatid) %>% arrange(chatid) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+PD <- sentence_detail_pd_tbl %>% filter(user!="Bot")  %>% group_by(chatid) %>% summarise(happy=sum(happy), bored=sum(bored),sad=sum(sad),excited=sum(excited),fear=sum(fear),angry=sum(angry)) %>% pivot_longer(cols = c("angry","fear","bored","excited","happy")) %>% group_by(chatid) %>% arrange(chatid) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+PD <- PD %>% inner_join(PD_T %>% select(chatid),by = c("chatid"="chatid")) %>% arrange(chatid)
+PD_T <- PD_T %>% inner_join(PD %>% select(chatid),by = c("chatid"="chatid")) %>% arrange(chatid)
+
+confusion_PD <- as.data.frame(table(factor(PD$name),factor(tolower(PD_T$name)))) %>% rename(Prediction=Var1,Truth=Var2)
+
+confusion_PD %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white")+
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(confusion_PD$Freq)))+
+  ggtitle('PARALLEL DOTS : OVERALL CONFUSION MATRIX-User')
+
+confusionMatrix(data = factor(PD$name),reference = factor(tolower(PD_T$name)))
+
+# MS Analytics Overall Chat Confusion Matrix
+
+MS_T <- actual_MS %>% filter(user != "Bot") %>% group_by(chatid) %>% summarise(POSITIVE=sum(POSITIVE), NEUTRAL=sum(NEUTRAL), NEGATIVE=sum(NEGATIVE)) %>% pivot_longer(cols = c("POSITIVE","NEUTRAL","NEGATIVE")) %>%  group_by(chatid) %>% arrange(chatid) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+MS <- document_detail_ms_tbl %>% pivot_longer(cols = c("positive","neutral","negative")) %>%  group_by(chatid) %>% arrange(chatid) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+MS <- MS %>% inner_join(MS_T %>% select(chatid),by = c("chatid"="chatid")) %>% arrange(chatid)
+MS_T <- MS_T %>% inner_join(MS %>% select(chatid),by = c("chatid"="chatid")) %>% arrange(chatid)
+
+confusion_MS <- as.data.frame(table(factor(MS$name),factor(tolower(MS_T$name)))) %>% rename(Prediction=Var1,Truth=Var2)
+
+confusion_MS %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white")+
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(confusion_MS$Freq)))+
+  ggtitle('MS : OVERALL CONFUSION MATRIX-USER')
+
+confusionMatrix(data = factor(MS$name),reference = factor(tolower(MS_T$name)))
+
+# IBM Overall Chat Confusion Matrix
+
+IBM_T <- actual_IBM %>%  filter(user != "Bot") %>% group_by(chatid) %>% summarise(ANGRY=sum(ANGRY),SAD=sum(SAD),JOY=sum(JOY),CONFIDENT=sum(CONFIDENT),ANALYTICAL=sum(ANALYTICAL),TENTATIVE=sum(TENTATIVE),FEAR=sum(FEAR)) %>% pivot_longer(cols = c("ANGRY","SAD","JOY","CONFIDENT","ANALYTICAL","TENTATIVE","FEAR")) %>%  group_by(chatid) %>% arrange(chatid) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+IBM <- document_detail_ibm_tbl_pref %>% filter(user != "Bot") %>%  rename(analytical=Analytical,sad=Sadness,confident=Confident,joy=Joy,tentative=Tentative,angry=Anger,fear=Fear) %>%  pivot_longer(cols = c("angry","sad","joy","confident","analytical","tentative","fear")) %>%  group_by(chatid) %>% arrange(chatid) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+IBM <- IBM %>% inner_join(IBM_T %>% select(chatid),by = c("chatid"="chatid")) %>% arrange(chatid)
+IBM_T <- IBM_T %>% inner_join(IBM %>% select(chatid),by = c("chatid"="chatid")) %>% arrange(chatid)
+
+confusion_IBM <- as.data.frame(table(factor(IBM$name),factor(tolower(IBM_T$name)))) %>% rename(Prediction=Var1,Truth=Var2)
+
+confusion_IBM %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white")+
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(confusion_IBM$Freq)))+
+  ggtitle('IBM : OVERALL CONFUSION MATRIX')
+
+confusionMatrix(data = factor(IBM$name),reference = factor(tolower(IBM_T$name)))
+
+# IBM Overall Chat Confusion Matrix [4 main emotions only]
+
+IBM_T1 <- actual_IBM %>%  filter(user != "Bot") %>% group_by(chatid) %>% summarise(ANGRY=sum(ANGRY),SAD=sum(SAD),JOY=sum(JOY),CONFIDENT=sum(CONFIDENT),ANALYTICAL=sum(ANALYTICAL),TENTATIVE=sum(TENTATIVE),FEAR=sum(FEAR)) %>% pivot_longer(cols = c("ANGRY","SAD","JOY","CONFIDENT","ANALYTICAL","TENTATIVE","FEAR")) %>% filter(name!="CONFIDENT",name!="ANALYTICAL",name!="TENTATIVE" ) %>%  group_by(chatid) %>% arrange(chatid) %>% arrange(desc(value), .by_group=T ) %>% top_n(1)  %>% filter(n()==1) %>% ungroup()
+
+IBM1 <- document_detail_ibm_tbl_pref %>% filter(user != "Bot") %>%  rename(analytical=Analytical,sad=Sadness,confident=Confident,joy=Joy,tentative=Tentative,angry=Anger,fear=Fear) %>%  pivot_longer(cols = c("angry","sad","joy","confident","analytical","tentative","fear")) %>% filter(name!="confident",name!="analytical",name!="tentative" ) %>%  group_by(chatid) %>% arrange(chatid) %>% arrange(desc(value), .by_group=T )  %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+IBM1 <- IBM1 %>% inner_join(IBM_T1 %>% select(chatid),by = c("chatid"="chatid")) %>% arrange(chatid)
+IBM_T1 <- IBM_T1 %>% inner_join(IBM1 %>% select(chatid),by = c("chatid"="chatid")) %>% arrange(chatid)
+
+confusion_IBM1 <- as.data.frame(table(factor(IBM1$name),factor(tolower(IBM_T1$name)))) %>% rename(Prediction=Var1,Truth=Var2)
+
+confusion_IBM1 %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white")+
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(confusion_IBM1$Freq)))+
+  ggtitle('IBM : OVERALL CONFUSION MATRIX[4 MAIN EMOTIONS]-USER')
+
+confusionMatrix(data = factor(IBM1$name),reference = factor(tolower(IBM_T1$name)))
+}
+```
+# Sentence Level Conufusion Matrix
+```{r}
+if (DisplaySentenceLvlConfusionMatrix) {
+  # Parallel Dots Sentence Level Confusion Matrix
+
+PD_sen_T <- actual_PD %>% filter(user != "Bot") %>%  select(chatid,chatorder,ANGRY,SAD,FEAR,BORED,EXCITED,HAPPY) %>% pivot_longer(cols = c("ANGRY","SAD","FEAR","BORED","EXCITED","HAPPY")) %>% group_by(chatid,chatorder) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+PD_sen <- sentence_detail_pd_tbl %>% filter(user != "Bot") %>% select(chatid,chatorder,happy,bored,sad,excited,fear,angry) %>% pivot_longer(cols = c("happy","bored","sad","excited","fear","angry")) %>% group_by(chatid,chatorder) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+PD_sen <- PD_sen %>% inner_join(PD_sen_T %>% select(chatid,chatorder),by = c("chatid"="chatid","chatorder"="chatorder")) %>% arrange(chatid,chatorder)
+PD_sen_T <- PD_sen_T %>% inner_join(PD_sen %>% select(chatid,chatorder),by = c("chatid"="chatid","chatorder"="chatorder"))%>% arrange(chatid,chatorder)
+
+confusion_sentence_PD <- as.data.frame(table(factor(PD_sen$name),factor(tolower(PD_sen_T$name)))) %>% rename(Prediction=Var1,Truth=Var2)
+
+confusion_sentence_PD %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white")+
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(confusion_sentence_PD$Freq)))+
+  ggtitle('PARALLEL DOTS : SENTENCE CONFUSION MATRIX-USER')
+
+confusionMatrix(data = factor(PD_sen$name),reference = factor(tolower(PD_sen_T$name)))
+
+# MS Analytics Sentence Level Confusion Matrix
+
+MS_sen_T <- actual_MS %>% filter(user != "Bot") %>%  select(chatid,chatorder,POSITIVE,NEUTRAL,NEGATIVE) %>% pivot_longer(cols = c("POSITIVE","NEUTRAL","NEGATIVE")) %>% group_by(chatid,chatorder) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+MS_sen <- sentence_detail_ms_tbl %>% filter(user != "Bot")  %>% select(chatid,chatorder,positive,neutral,negative) %>% pivot_longer(cols = c("positive","neutral","negative")) %>% group_by(chatid,chatorder) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+MS_sen <- MS_sen %>% inner_join(MS_sen_T %>% select(chatid,chatorder),by = c("chatid"="chatid","chatorder"="chatorder")) %>% arrange(chatid,chatorder)
+MS_sen_T <- MS_sen_T %>% inner_join(MS_sen %>% select(chatid,chatorder),by = c("chatid"="chatid","chatorder"="chatorder"))%>% arrange(chatid,chatorder)
+
+confusion_sentence_MS <- as.data.frame(table(factor(MS_sen$name),factor(tolower(MS_sen_T$name)))) %>% rename(Prediction=Var1,Truth=Var2)
+
+confusion_sentence_MS %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white") +
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(confusion_sentence_MS$Freq)))+
+  ggtitle('MS : SENTENCE CONFUSION MATRIX-USER')
+
+confusionMatrix(data = factor(MS_sen$name),reference = factor(tolower(MS_sen_T$name)))
+
+# IBM Sentence Level Confusion Matrix
+
+IBM_sen_T <- actual_IBM %>% filter(user != "Bot") %>%  select(chatid,chatorder,ANGRY,SAD,JOY,CONFIDENT,ANALYTICAL,TENTATIVE,FEAR) %>% pivot_longer(cols = c("ANGRY","SAD","JOY","CONFIDENT","ANALYTICAL","TENTATIVE","FEAR")) %>% group_by(chatid,chatorder) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+IBM_sen <- document_detail_ibm_tbl1    %>% group_by(chatid,chatorder) %>% arrange(desc(score), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup() #document_detail_ibm_tbl1 OR sentence_detail_ibm_tbl1
+
+IBM_sen <- IBM_sen %>% inner_join(IBM_sen_T %>% select(chatid,chatorder),by = c("chatid"="chatid","chatorder"="chatorder")) %>% arrange(chatid,chatorder)
+IBM_sen_T <- IBM_sen_T %>% inner_join(IBM_sen %>% select(chatid,chatorder),by = c("chatid"="chatid","chatorder"="chatorder"))%>% arrange(chatid,chatorder)
+
+confusion_sentence_IBM <- as.data.frame(table(factor(tolower(IBM_sen$tone_name)),factor(tolower(IBM_sen_T$name)))) %>% rename(Prediction=Var1,Truth=Var2)
+
+confusion_sentence_IBM %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white") +
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(confusion_sentence_IBM$Freq)))+
+  ggtitle('IBM : SENTENCE CONFUSION MATRIX-USER')
+
+confusionMatrix(data = factor(MS_sen$name),reference = factor(tolower(MS_sen_T$name)))
+
+# IBM Sentence Level Confusion Matrix [4 MAIN EMOTIONS]
+
+IBM_sen_T1 <- actual_IBM %>% filter(user != "Bot") %>%  select(chatid,chatorder,ANGRY,SAD,JOY,FEAR) %>% pivot_longer(cols = c("ANGRY","SAD","JOY","FEAR")) %>% group_by(chatid,chatorder) %>% arrange(desc(value), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup()
+
+IBM_sen1 <- document_detail_ibm_tbl1 %>% filter(tone_name %in% c("Anger","Sadness","Joy","Fear"))  %>% group_by(chatid,chatorder) %>% arrange(desc(score), .by_group=T ) %>% top_n(1) %>% filter(n()==1) %>% ungroup() #document_detail_ibm_tbl1 OR sentence_detail_ibm_tbl1
+
+IBM_sen1 <- IBM_sen1 %>% inner_join(IBM_sen_T1 %>% select(chatid,chatorder),by = c("chatid"="chatid","chatorder"="chatorder")) %>% arrange(chatid,chatorder)
+IBM_sen_T1 <- IBM_sen_T1 %>% inner_join(IBM_sen1 %>% select(chatid,chatorder),by = c("chatid"="chatid","chatorder"="chatorder"))%>% arrange(chatid,chatorder)
+
+confusion_sentence_IBM1 <- as.data.frame(table(factor(tolower(IBM_sen1$tone_name)),factor(tolower(IBM_sen_T1$name)))) %>% rename(Prediction=Var1,Truth=Var2)
+
+confusion_sentence_IBM1 %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white") +
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(confusion_sentence_IBM1$Freq)))+
+  ggtitle('IBM : SENTENCE CONFUSION MATRIX[4 MAIN EMOTIONS]-USER')
+
+confusionMatrix(data = factor(MS_sen1$name),reference = factor(tolower(MS_sen_T1$name)))
+}
+```
+# Sentence Level Random Forest
+```{r}
+if (SentenceLvlRandomForest) {
+  # Parallel Dots Sentence Level Random Forest
+
+pd_rf_sentence <-  sentence_detail_pd_tbl  %>% select(chatid,chatorder,happy,bored,sad,excited,fear,angry) %>% inner_join(PD_sen_T %>% rename(actualemotion=name)) 
+
+pd_rf_sentence <- pd_rf_sentence %>% unite(chatid, c("chatid","chatorder")) %>% select(-value) %>% mutate(actualemotion=as.factor(actualemotion))
+
+set.seed(1000)
+pd_rf_sentence_train <- sample_n(pd_rf_sentence,size =as.integer(round(count(pd_rf_sentence)/2,0)),replace = T)
+pd_rf_sentence_test <- sample_n(pd_rf_sentence,size =as.integer(round(count(pd_rf_sentence)/2,0)),replace = T)
+
+pd_rf_sen_model <-  randomForest(actualemotion ~ happy+bored+sad+excited+fear+angry,data = pd_rf_sentence_train, proximity=T)
+pd_rf_sen_model
+
+pd_rf_sentence_test_outcome <- predict(pd_rf_sen_model, pd_rf_sentence_test, type = "class")
+table(pd_rf_sentence_test_outcome,pd_rf_sentence_test$actualemotion)
+
+pd_rf_sentence_test_result <- as.data.frame(table(pd_rf_sentence_test_outcome,factor(tolower(pd_rf_sentence_test$actualemotion)))) %>% rename(Prediction=pd_rf_sentence_test_outcome,Truth=Var2)
+
+pd_rf_sentence_test_result %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white") +
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(pd_rf_sentence_test_result$Freq)))+
+  ggtitle(paste('PD:RF SENTENCE CONFUSION MATRIX-USER , Error%=',round(1-mean(pd_rf_sentence_test_outcome == pd_rf_sentence_test$actualemotion),2)))+
+  labs(subtitle = "actualemotion ~ happy+bored+sad+excited+fear+angry")
+
+if(FALSE)
+{
+  pd_rf_sen_model_err <- data.frame(
+  Trees=rep(1:nrow(pd_rf_sen_model$err.rate),times=6),
+  Type =rep(c("OOB","ANGRY","BORED","FEAR","HAPPY","SAD"),each=nrow(pd_rf_sen_model$err.rate)),
+  Error = c(pd_rf_sen_model$err.rate[,"OOB"],
+            pd_rf_sen_model$err.rate[,"ANGRY"],
+            pd_rf_sen_model$err.rate[,"BORED"],
+            pd_rf_sen_model$err.rate[,"FEAR"],
+            pd_rf_sen_model$err.rate[,"HAPPY"],
+            pd_rf_sen_model$err.rate[,"SAD"])
+  )
+
+  ggplot(data=pd_rf_sen_model_err,aes(x=Trees,y=Error)) + geom_line(aes(color=Type))
+
+  val <-  vector(length = 10)
+
+  for (i in 1:10) {
+  temp_model <-  randomForest(actualemotion ~ happy+bored+sad+excited+fear+angry,data = pd_rf_sentence_train, ntree=1000,mtry=i)
+  val[i] <- temp_model$err.rate[nrow(temp_model$err.rate),1]
+  }
+
+  val
+}
+
+# MS Sentence Level Random Forest
+
+ms_rf_sentence <-  sentence_detail_ms_tbl %>% select(chatid,chatorder,positive,neutral,negative) %>% inner_join(MS_sen_T %>% rename(actualemotion=name),by = c("chatid"="chatid","chatorder"="chatorder")) 
+
+ms_rf_sentence <- ms_rf_sentence %>% unite(chatid, c("chatid","chatorder")) %>% select(-value) %>% mutate(actualemotion=as.factor(actualemotion))
+
+set.seed(1000)
+ms_rf_sentence_train <- sample_n(ms_rf_sentence,size =as.integer(round(count(ms_rf_sentence)/2,0)),replace = T)
+ms_rf_sentence_test <- sample_n(ms_rf_sentence,size =as.integer(round(count(ms_rf_sentence)/2,0)),replace = T)
+
+ms_rf_sen_model <-  randomForest(actualemotion ~ positive+neutral+negative,data = ms_rf_sentence_train, proximity=T)
+ms_rf_sen_model
+
+ms_rf_sentence_test_outcome <- predict(ms_rf_sen_model, ms_rf_sentence_test, type = "class")
+table(ms_rf_sentence_test_outcome,ms_rf_sentence_test$actualemotion)
+
+ms_rf_sentence_test_result <- as.data.frame(table(ms_rf_sentence_test_outcome,factor(tolower(ms_rf_sentence_test$actualemotion)))) %>% rename(Prediction=ms_rf_sentence_test_outcome,Truth=Var2)
+
+ms_rf_sentence_test_result %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white") +
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(ms_rf_sentence_test_result$Freq)))+
+  ggtitle(paste('MS:RF SENTENCE CONFUSION MATRIX-USER , Error%=',round(1-mean(ms_rf_sentence_test_outcome == ms_rf_sentence_test$actualemotion),2)))+
+  labs(subtitle = "actualemotion ~ positive+neutral+negative")
+
+if (FALSE) 
+{
+  ms_rf_sen_model_err <- data.frame(
+  Trees=rep(1:nrow(ms_rf_sen_model$err.rate),times=4),
+  Type =rep(c("OOB","NEGATIVE","NEUTRAL","POSITIVE"),each=nrow(ms_rf_sen_model$err.rate)),
+  Error = c(ms_rf_sen_model$err.rate[,"OOB"],
+            ms_rf_sen_model$err.rate[,"NEGATIVE"],
+            ms_rf_sen_model$err.rate[,"NEUTRAL"],
+            ms_rf_sen_model$err.rate[,"POSITIVE"])
+  )
+  ggplot(data=ms_rf_sen_model_err,aes(x=Trees,y=Error)) + geom_line(aes(color=Type))
+
+  val <-  vector(length = 10)
+
+  for (i in 1:10) {
+    temp_model <-  randomForest(actualemotion ~ positive+neutral+negative,data = ms_rf_sentence_train, ntree=1000,mtry=i)
+    val[i] <- temp_model$err.rate[nrow(temp_model$err.rate),1]
+  }
+  val
+}
+
+# IBM Sentence Level Random Forest
+ibm_rf_sentence <-  document_detail_ibm_tbl1 %>% select(chatid,chatorder,score,tone_id) %>% pivot_wider(names_from = tone_id,values_from = score) %>% replace(.,is.na(.),0)  %>% group_by(chatid,chatorder) %>% summarise_all(sum) %>% inner_join(IBM_sen_T %>% rename(actualemotion=name),by = c("chatid"="chatid","chatorder"="chatorder")) 
+
+ibm_rf_sentence <- ibm_rf_sentence %>% unite(chatid, c("chatid","chatorder")) %>% select(-value) %>% mutate(actualemotion=as.factor(actualemotion))
+
+set.seed(1000)
+ibm_rf_sentence_train <- sample_n(ibm_rf_sentence,size =as.integer(round(count(ibm_rf_sentence)/2,0)),replace = T)
+ibm_rf_sentence_test <- sample_n(ibm_rf_sentence,size =as.integer(round(count(ibm_rf_sentence)/2,0)),replace = T)
+
+ibm_rf_sen_model <-  randomForest(actualemotion ~ analytical+tentative+joy+confident+sadness+anger+fear,data = ibm_rf_sentence_train, proximity=T)
+ibm_rf_sen_model
+
+ibm_rf_sentence_test_outcome <- predict(ibm_rf_sen_model, ibm_rf_sentence_test, type = "class")
+table(ibm_rf_sentence_test_outcome,ibm_rf_sentence_test$actualemotion)
+
+ibm_rf_sentence_test_result <- as.data.frame(table(ibm_rf_sentence_test_outcome,factor(tolower(ibm_rf_sentence_test$actualemotion)))) %>% rename(Prediction=ibm_rf_sentence_test_outcome,Truth=Var2)
+
+ibm_rf_sentence_test_result %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white") +
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(ibm_rf_sentence_test_result$Freq)))+
+  ggtitle(paste('IBM:RF SENTENCE CONFUSION MATRIX-USER , Error%=',round(1-mean(ibm_rf_sentence_test_outcome == ibm_rf_sentence_test$actualemotion),2)))+
+  labs(subtitle = "actualemotion ~ analytical+tentative+joy+confident+sadness+anger+fear")
+
+if (FALSE) 
+{
+  ibm_rf_sen_model_err <- data.frame(
+  Trees=rep(1:nrow(ibm_rf_sen_model$err.rate),times=8),
+  Type =rep(c("OOB","ANALYTICAL","ANGRY","CONFIDENT","FEAR","JOY","SAD","TENTATIVE"),each=nrow(ibm_rf_sen_model$err.rate)),
+  Error = c(ibm_rf_sen_model$err.rate[,"OOB"],
+            ibm_rf_sen_model$err.rate[,"ANALYTICAL"],
+            ibm_rf_sen_model$err.rate[,"ANGRY"],
+            ibm_rf_sen_model$err.rate[,"CONFIDENT"],
+            ibm_rf_sen_model$err.rate[,"FEAR"],
+            ibm_rf_sen_model$err.rate[,"JOY"],
+            ibm_rf_sen_model$err.rate[,"SAD"],
+            ibm_rf_sen_model$err.rate[,"TENTATIVE"])
+  )
+
+  ggplot(data=ibm_rf_sen_model_err,aes(x=Trees,y=Error)) + geom_line(aes(color=Type))
+
+  val <-  vector(length = 10)
+  for (i in 1:10) {
+  temp_model <-  randomForest(actualemotion ~ analytical+tentative+joy+confident+sadness+anger+fear,data = ibm_rf_sentence_train,ntree=1000,mtry=i)
+  val[i] <- temp_model$err.rate[nrow(temp_model$err.rate),1]
+  }
+  val
+}
+
+# IBM Sentence Level Random Forest [MAIN EMOTIONS ONLY]
+
+ibm_rf_sentence1 <-  document_detail_ibm_tbl1 %>% select(chatid,chatorder,score,tone_id) %>% pivot_wider(names_from = tone_id,values_from = score) %>% replace(.,is.na(.),0)  %>% group_by(chatid,chatorder) %>% summarise_all(sum) %>% inner_join(IBM_sen_T1 %>% rename(actualemotion=name),by = c("chatid"="chatid","chatorder"="chatorder"))
+
+ibm_rf_sentence1 <- ibm_rf_sentence1 %>% unite(chatid, c("chatid","chatorder")) %>% select(-value) %>% mutate(actualemotion=as.factor(actualemotion))
+
+set.seed(500)
+ibm_rf_sentence_train1 <- sample_n(ibm_rf_sentence1,size =as.integer(round(count(ibm_rf_sentence1)/2,0)),replace = T)
+ibm_rf_sentence_test1 <- sample_n(ibm_rf_sentence1,size =as.integer(round(count(ibm_rf_sentence1)/2,0)),replace = T)
+
+ibm_rf_sen_model1 <-  randomForest(actualemotion ~ analytical+tentative+joy+confident+sadness+anger+fear,data = ibm_rf_sentence_train1, proximity=T)
+ibm_rf_sen_model1
+
+ibm_rf_sentence_test_outcome1 <- predict(ibm_rf_sen_model1, ibm_rf_sentence_test1, type = "class")
+table(ibm_rf_sentence_test_outcome1,ibm_rf_sentence_test1$actualemotion)
+
+ibm_rf_sentence_test_result1 <- as.data.frame(table(ibm_rf_sentence_test_outcome1,factor(tolower(ibm_rf_sentence_test1$actualemotion)))) %>% rename(Prediction=ibm_rf_sentence_test_outcome1,Truth=Var2)
+
+ibm_rf_sentence_test_result1 %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white") +
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(ibm_rf_sentence_test_result1$Freq)))+
+  ggtitle(paste('IBM:RF SENTENCE CONFUSION MATRIX-USER , Error%=',round(1-mean(ibm_rf_sentence_test_outcome1 == ibm_rf_sentence_test1$actualemotion),2)))+
+  labs(subtitle = "actualemotion~analytical+tentative+joy+confident+sadness+anger+fear [4 MAIN EMOTIONS]")
+
+if(FALSE)
+{
+  ibm_rf_sen_model_err1 <- data.frame(
+  Trees=rep(1:nrow(ibm_rf_sen_model1$err.rate),times=5),
+  Type =rep(c("OOB","ANGRY","FEAR","JOY","SAD"),each=nrow(ibm_rf_sen_model1$err.rate)),
+  Error = c(ibm_rf_sen_model1$err.rate[,"OOB"],
+            ibm_rf_sen_model1$err.rate[,"ANGRY"],
+            ibm_rf_sen_model1$err.rate[,"FEAR"],
+            ibm_rf_sen_model1$err.rate[,"JOY"],
+            ibm_rf_sen_model1$err.rate[,"SAD"]))
+
+  ggplot(data=ibm_rf_sen_model_err1,aes(x=Trees,y=Error)) + geom_line(aes(color=Type))
+
+  val <-  vector(length = 10)
+  for (i in 1:10) {
+    temp_model <-  randomForest(actualemotion ~ analytical+tentative+joy+confident+sadness+anger+fear,data = ibm_rf_sentence1, ntree=500,mtry=i)
+    val[i] <- temp_model$err.rate[nrow(temp_model$err.rate),1]
+  }
+  val
+}
+}
+
+
+```
+
+# API Sentiment Correlations
+```{r}
+if (DisplayAPISentimentCorrelation) {
+  all_corr <- document_detail_ibm_tbl1  %>% rename(emotion=tone_id) %>% mutate(emotion=paste("IBM",emotion)) %>%  select(chatid,chatorder,emotion,score) %>% 
+  union(sentence_detail_pd_tbl %>% pivot_longer(cols=c("happy","bored","sad","excited","fear","angry"),names_to = "emotion",values_to = "score") %>% mutate(emotion=paste("PD",emotion))  %>% select(chatid,chatorder,emotion,score)) %>% 
+  union(sentence_detail_ms_tbl %>% pivot_longer(cols=c("positive","neutral","negative"),names_to = "emotion",values_to = "score")%>% mutate(emotion=paste("MS",emotion))  %>%select(chatid,chatorder,emotion,score)) %>% 
+  group_by(chatid,chatorder,emotion) %>% summarise(score=sum(score))%>% arrange(emotion) %>% pivot_wider(names_from = emotion,values_from = score) %>% replace(.,is.na(.),0) %>% 
+  inner_join(sentence_detail_pd_tbl %>% distinct(chatid,chatorder),by = c("chatid"="chatid","chatorder"="chatorder")) %>% 
+  inner_join(actual_All %>% select(-text,-user),by=c("chatid"="chatid","chatorder"="chatorder")) %>% ungroup() %>% select(-chatid,-chatorder) 
+
+prediction <- all_corr %>% select(-POSITIVE,-NEUTRAL,-NEGATIVE,-ANGRY,-SAD,-FEAR,-BORED,-EXCITED,-HAPPY,-CONFIDENT,-ANALYTICAL,-TENTATIVE)
+reality <- all_corr %>% select(POSITIVE,NEUTRAL,NEGATIVE,ANGRY,SAD,FEAR,BORED,EXCITED,HAPPY,CONFIDENT,ANALYTICAL,TENTATIVE)
+
+corr <- cor(reality, prediction) 
+corrplot(corr, method="circle")
+}
+```
+
+# IRR - Cohen Kappa- Weighted
+```{r}
+if (PerformIRR) {
+  # Angry Comparision
+kappa2(actual_IRR_ANA[,c("ANGRY_BP","ANGRY_MP")],weight = "equal")
+kappa2(actual_IRR_ANA[,c("ANGRY_VA","ANGRY_MP")],weight = "equal")
+kappa2(actual_IRR_ANA[,c("ANGRY_VA","ANGRY_BP")],weight = "equal")
+
+# Happy Comparision
+kappa2(actual_IRR_ANA[,c("HAPPY_BP","HAPPY_MP")],weight = "equal")
+kappa2(actual_IRR_ANA[,c("HAPPY_VA","HAPPY_MP")],weight = "equal")
+kappa2(actual_IRR_ANA[,c("HAPPY_VA","HAPPY_BP")],weight = "equal")
+}
+
+```
+
+# RANDOM FOREST ANGER-HAPPY LEVELS
+```{r}
+if (AngerHappinessRandomForest) {
+  #HAPPY ANGER LEVELS WITH BEST ALL MIX API SCORES BASED ON CORRELATION TABLE
+# formulae_A <- ANGRY_Lvl ~ Anger+angry+positive+negative+Sadness+excited+happy+bored+sad+fear+Fear+Analytical
+# formulae_H <- HAPPY_Lvl ~ Joy+positive+happy+sad+excited+fear+negative+bored+neutral+angry
+#HAPPY ANGER LEVELS WITH BEST PD API SCORES
+# formulae_A <- ANGRY_Lvl ~ angry+excited+happy+bored+sad+fear
+# formulae_H <- HAPPY_Lvl ~ happy+sad+excited+fear+bored+angry
+#HAPPY ANGER LEVELS WITH BEST MS API SCORES
+# formulae_A <- ANGRY_Lvl ~ positive+negative+neutral
+# formulae_H <- HAPPY_Lvl ~ positive+negative+neutral
+#HAPPY ANGER LEVELS WITH BEST IBM API SCORES 
+# formulae_A <- ANGRY_Lvl ~ Anger+Sadness+Fear+Analytical+Confident+Tentative+Joy
+# formulae_H <- HAPPY_Lvl ~ Anger+Sadness+Fear+Analytical+Confident+Tentative+Joy
+
+
+formulae_A <- ANGRY_Lvl ~ angry+happy+Anger+Joy  #6 angry+happy+positive+negative+Anger+Joy #6 angry+happy+positive+negative+Anger+Joy+Sadness #6 angry+happy+positive+negative+Anger+Joy+Sadness+sad #6 angry+happy+positive+negative #7 angry+happy+positive+negative+Anger+Joy+sad 
+formulae_H <- HAPPY_Lvl ~ angry+happy+Anger+Joy  #1 angry+happy+positive+negative+Anger+Joy  #1 angry+happy+positive+negative+Anger+Joy+Sadness #1 angry+happy+positive+negative+Anger+Joy+Sadness+sad #2 angry+happy+positive+negative+Anger+Joy+sad #2 angry+happy+positive+negative
+
+AH_sen_T <-  actual_AH  %>% mutate(ANGRY_Lvl=round(ANGRY),HAPPY_Lvl=round(HAPPY)) 
+
+AH_rf_sentence <- document_detail_ibm_tbl1 %>% select(-tone_id) %>% 
+  pivot_wider(names_from = tone_name,values_from = score) %>% 
+  inner_join(sentence_detail_pd_tbl %>% select(chatid,chatorder,happy,bored,sad,excited,fear,angry),by = c("chatid"="chatid","chatorder"="chatorder")) %>% 
+  inner_join(sentence_detail_ms_tbl %>% select(chatid,positive,neutral,negative,chatorder),by = c("chatid"="chatid","chatorder"="chatorder")) %>% 
+ replace(.,is.na(.),0) %>% 
+  inner_join(AH_sen_T %>% select(chatid,chatorder,ANGRY_Lvl,HAPPY_Lvl),by=c("chatid"="chatid","chatorder"="chatorder")) %>% ungroup()
+
+AH_rf_sentence <- AH_rf_sentence %>% unite(chatid, c("chatid","chatorder"))  %>% mutate(ANGRY_Lvl=as.factor(ANGRY_Lvl),HAPPY_Lvl=as.factor(HAPPY_Lvl))
+
+set.seed(1000)
+AH_rf_sentence_train <- sample_n(AH_rf_sentence,size =as.integer(round(count(AH_rf_sentence)/2,0)),replace = T)
+AH_rf_sentence_test <- AH_rf_sentence#sample_n(AH_rf_sentence,size =as.integer(round(count(AH_rf_sentence)/2,0)),replace = T)
+
+A_AH_rf_sen_model <-  randomForest(formulae_A,data = AH_rf_sentence_train, proximity=T,ntree=500)
+H_AH_rf_sen_model <-  randomForest(formulae_H,data = AH_rf_sentence_train, proximity=T,ntree=500)
+
+A_AH_rf_sen_model
+
+A_AH_rf_sentence_test_outcome <- predict(A_AH_rf_sen_model, AH_rf_sentence_test %>% select(angry,happy,Anger,Joy), type = "class")
+table(A_AH_rf_sentence_test_outcome,AH_rf_sentence_test$ANGRY_Lvl)
+
+A_AH_rf_sentence_test_result <- as.data.frame(table(A_AH_rf_sentence_test_outcome,factor(tolower(AH_rf_sentence_test$ANGRY_Lvl)))) %>% rename(Prediction=A_AH_rf_sentence_test_outcome,Truth=Var2)
+
+A_AH_rf_sentence_test_result %>% summarise(sum(Freq))
+A_AH_rf_sentence_test_result %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white") +
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(A_AH_rf_sentence_test_result$Freq)))+
+  ggtitle(paste('AH RF SENTENCE CONFUSION MATRIX-ANGER , Error%=',round(1-mean(A_AH_rf_sentence_test_outcome == AH_rf_sentence_test$ANGRY_Lvl),2)))+
+  labs(subtitle = "ANGER~SELECT VARIABLES FROM SELECT EMOTIONS FROM APIS")
+
+    if (FALSE)
+{
+  A_AH_rf_sen_model_err <- data.frame(
+  Trees=rep(1:nrow(A_AH_rf_sen_model$err.rate),times=7),
+  Type =rep(c("OOB","0","1","2","3","","5"),each=nrow(A_AH_rf_sen_model$err.rate)),
+  Error = c(A_AH_rf_sen_model$err.rate[,"OOB"],
+            A_AH_rf_sen_model$err.rate[,"0"],
+            A_AH_rf_sen_model$err.rate[,"1"],
+            A_AH_rf_sen_model$err.rate[,"2"],
+            A_AH_rf_sen_model$err.rate[,"3"],
+            A_AH_rf_sen_model$err.rate[,"4"],
+            A_AH_rf_sen_model$err.rate[,"5"]))
+
+  ggplot(data=A_AH_rf_sen_model_err,aes(x=Trees,y=Error)) + geom_line(aes(color=Type))
+  
+  val <-  vector(length = 10)
+  for (i in 1:10) {
+    print(i)
+    temp_model <-  randomForest(formulae_A,data = AH_rf_sentence_train, ntree=500,mtry=i)
+    val[i] <- temp_model$err.rate[nrow(temp_model$err.rate),1]
+  }
+  val
+}
+
+H_AH_rf_sen_model
+
+H_AH_rf_sentence_test_outcome <- predict(H_AH_rf_sen_model, AH_rf_sentence_test, type = "class")
+table(H_AH_rf_sentence_test_outcome,AH_rf_sentence_test$HAPPY_Lvl)
+
+H_AH_rf_sentence_test_result <- as.data.frame(table(H_AH_rf_sentence_test_outcome,factor(tolower(AH_rf_sentence_test$HAPPY_Lvl)))) %>% rename(Prediction=H_AH_rf_sentence_test_outcome,Truth=Var2)
+
+H_AH_rf_sentence_test_result %>% summarise(sum(Freq))
+H_AH_rf_sentence_test_result %>% ggplot(aes(x = Prediction,y = Truth,label=Freq)) +
+  geom_tile(aes(fill = Freq),color="white") +
+  geom_text(color="black")+
+  scale_fill_gradient(low="yellow1", high="springgreen2", limits=c(1, max(H_AH_rf_sentence_test_result$Freq)))+
+  ggtitle(paste('AH RF SENTENCE CONFUSION MATRIX-HAPPY , Error%=',round(1-mean(H_AH_rf_sentence_test_outcome == AH_rf_sentence_test$HAPPY_Lvl),2)))+
+  labs(subtitle = "actualemotion~SELECT VARIABLES FROM SELECT EMOTIONS FROM APIS")
+
+if (FALSE)
+{
+  H_AH_rf_sen_model_err <- data.frame(
+  Trees=rep(1:nrow(H_AH_rf_sen_model$err.rate),times=7),
+  Type =rep(c("OOB","0","1","2","3","","5"),each=nrow(H_AH_rf_sen_model$err.rate)),
+  Error = c(H_AH_rf_sen_model$err.rate[,"OOB"],
+            H_AH_rf_sen_model$err.rate[,"0"],
+            H_AH_rf_sen_model$err.rate[,"1"],
+            H_AH_rf_sen_model$err.rate[,"2"],
+            H_AH_rf_sen_model$err.rate[,"3"],
+            H_AH_rf_sen_model$err.rate[,"4"],
+            H_AH_rf_sen_model$err.rate[,"5"]))
+
+  ggplot(data=H_AH_rf_sen_model_err,aes(x=Trees,y=Error)) + geom_line(aes(color=Type))
+
+  val <-  vector(length = 10)
+  for (i in 1:10) {
+    temp_model <-  randomForest(formulae_H,data = AH_rf_sentence_train, ntree=500,mtry=i)
+    val[i] <- temp_model$err.rate[nrow(temp_model$err.rate),1]
+  }
+  val
+}
+
+AH_rf_sentence_result <- AH_rf_sentence_test %>% mutate(pred_Anger=A_AH_rf_sentence_test_outcome,pred_Happy=H_AH_rf_sentence_test_outcome)
+
+}
+```
+
+# Tokenise Data & TF IDF
+```{r}
+if (Tokenise_IDF) {
+  tidy_data_bi_token <- actual_data %>%  
+    unnest_tokens(multi_gram,text,token ="ngrams",n=2) %>% 
+    separate(multi_gram,into = c("word1","word"),sep=" ") %>%
+    filter(!is.na(word),!grepl("[[:digit:]]",word))
+
+data(stop_words)
+
+  tidy_data_bi_token <- tidy_data_bi_token %>%
+  anti_join(stop_words,by = c("word"="word"))
+  
+tidy_data_idf <-  tidy_data_bi_token %>% group_by(chatid,word) %>% count() %>% bind_tf_idf(word,chatid,n) %>% ungroup()
+}
+```
+
+# Form UI Data
+```{r}
+if (FromUIData) {
+  Aggregated_Result <-  AH_rf_sentence_result %>% select(-ANGRY_Lvl,-HAPPY_Lvl) %>% separate(col = chatid,into = c("chatid","chatorder"),convert = T) %>% right_join (AH_sen_T,by = c("chatid"="chatid","chatorder"="chatorder")) %>% rename(Model_Happy=pred_Happy,Model_Anger=pred_Anger,BenchMark_Anger=ANGRY_Lvl,BenchMark_Happy=HAPPY_Lvl)
+}
+```
+
+
+# Save and Load Aggregated Result
+```{r}
+
+if (SaveAggregatedResult) {
+  save(Aggregated_Result,file="Bkp\\Aggregated_Result.rda")
+  save(tidy_data_idf,file="Bkp\\tidy_data_idf.rda")
+  save(actual_data,file="Bkp\\actual_data.rda")
+}
+if (LoadAggregatedResult) {
+    load(file = "Bkp\\Aggregated_Result.rda")
+    load(file = "Bkp\\tidy_data_idf.rda")
+    load(file = "Bkp\\actual_data.rda")
+}
+
+```
+
+# Preprocess UI Data
+```{r}
+chatid_list <- Aggregated_Result %>% distinct(chatid) %>% as.list()
+```
+
+# UI
+```{r}
+ui <- shinyUI(
+  dashboardPage(
+    dashboardHeader(title = "MAD Dashboard"),
+    dashboardSidebar(
+      sidebarMenu(id="sidetabs",
+        menuItem("Chat Overview", tabName = "ChatOverviewScreen", icon = icon("columns")),
+        menuItem("Chat Details", tabName = "ChatDetailScreen", icon = icon("search")))
+      ),
+    dashboardBody(
+      tabItems(
+        tabItem(tabName = "ChatOverviewScreen",
+                fluidRow(
+                  column(dataTableOutput("ChatOverview"),width = 12))
+                ),
+        tabItem(tabName = "ChatDetailScreen",
+                fluidRow(
+                  selectInput("SelChat","Select Chat",chatid_list$chatid)),
+                fluidRow(
+                  column(plotlyOutput("CrossChat"),width = 6),
+                  column(plotOutput("AngerVSHappy"),width = 3),
+                  column(plotOutput("KeyWords"),width = 3)),
+                fluidRow(
+                  column(dataTableOutput("ChatDetail"),width = 12))
+              )
+            )
+      )
+    )
+)
+
+server <- shinyServer(function(input,output,session){
+  
+  output$ChatOverview <- renderDataTable({
+     slope_est <- Aggregated_Result %>% 
+      select(chatid,chatorder,Model_Anger) %>% mutate(Model_Anger=as.numeric(levels(Model_Anger))[Model_Anger]) %>% 
+       filter(!is.na(Model_Anger) & Model_Anger>0) %>% group_by(chatid) %>% filter(n()>1) %>% nest() %>% 
+       mutate(model = map(data, ~lm( Model_Anger~chatorder, data = .) %>% tidy)) %>% unnest(model) %>% 
+       filter(term=="chatorder") %>% select(chatid,estimate) %>% rename(Rage_Rate=estimate) %>% mutate(Rage_Rate=Rage_Rate*100)
+    Aggregated_Result %>% 
+      select(chatid,BenchMark_Anger,BenchMark_Happy,Model_Anger,Model_Happy) %>% filter(!is.na(Model_Anger) | !is.na(Model_Happy)) %>% 
+      mutate(Model_Anger=as.numeric(levels(Model_Anger))[Model_Anger],Model_Happy=as.numeric(levels(Model_Happy))[Model_Happy]) %>%
+      group_by(chatid) %>% summarise(Anger=sum(Model_Anger),Happy=sum(Model_Happy)) %>% 
+      mutate(Tot=Anger+Happy,Anger_Percent=round(Anger/Tot*100,0),Happiness_Percent=round(Happy/Tot*100)) %>% 
+      left_join(slope_est,by=c("chatid"="chatid")) %>% 
+      inner_join(Aggregated_Result %>% filter(user!="Bot") %>% distinct(chatid,user),by = c("chatid"="chatid")) %>% 
+      mutate(Rage_Rate=if_else(is.na(Rage_Rate),-999,round(Rage_Rate,2)), Warning = if_else((Rage_Rate>3.9 & Anger_Percent>50) | (is.na(Rage_Rate)& Anger_Percent>50) | (Anger_Percent>50 | Rage_Rate>3.9),"Yes","No")) %>% 
+      mutate(Rage_Rate=replace(Rage_Rate,Rage_Rate==-999,NA),Rage_Rate=replace(Rage_Rate,Rage_Rate<0.09,"Negligable")) %>%
+      select(chatid,user,Anger_Percent,Happiness_Percent,Rage_Rate,Warning)  },escape = F)
+
+  output$ChatDetail <- renderDataTable({
+    Aggregated_Result %>% select(chatid,user,chatorder,text,BenchMark_Anger,BenchMark_Happy,Model_Anger,Model_Happy) %>% filter(chatid==input$SelChat) },escape = F)
+  
+
+  output$CrossChat <- renderPlotly({
+    CrossChat_graph <- Aggregated_Result %>% 
+  filter(chatid==input$SelChat & ( !is.na(Model_Anger) | !is.na(Model_Happy))) %>% 
+  select(chatorder,Model_Anger,Model_Happy) %>% 
+  mutate(Model_Anger=as.numeric(levels(Model_Anger))[Model_Anger],Model_Happy=as.numeric(levels(Model_Happy))[Model_Happy],Model_Anger=Model_Anger * (-1)) %>% 
+  ggplot() +
+  geom_line(mapping =  aes(x=chatorder,y=Model_Anger),size=1,color="red")+
+  geom_line(mapping =  aes(x=chatorder,y=Model_Happy),size=1,color="green")+
+  geom_point(mapping =  aes(x=chatorder,y=Model_Anger),color='tomato')+
+  geom_point(mapping =  aes(x=chatorder,y=Model_Happy),color='yellowgreen')+
+  geom_hline(yintercept =0,color="black",size=1)+
+  ggplot2::annotate("text",x=3,y=5, label= "Happiness",color="springgreen3")+
+  ggplot2::annotate("text",x=3,y=-5, label= "Anger",color="tomato")+
+  labs(x = "Chat Order", y = "Emotion")+
+  scale_y_continuous(breaks=seq(-5,5,1))+
+  scale_x_continuous(breaks=seq(-5,Aggregated_Result %>% filter(chatid==input$SelChat & ( !is.na(Model_Anger) | !is.na(Model_Happy))) %>% 
+  summarise(max(chatorder)) %>% as.integer(),1))+
+  ggtitle("CROSS CHAT SCORES")+
+  theme_classic()+
+  theme(  panel.background = element_rect(fill = "aliceblue"))
+  ggplotly(CrossChat_graph)
+  })
+  
+  output$AngerVSHappy <- renderPlot({
+    Aggregated_Result %>% 
+    select(chatid,Model_Anger,Model_Happy) %>% 
+    filter(chatid==input$SelChat & ( !is.na(Model_Anger) | !is.na(Model_Happy))) %>% 
+    mutate(Model_Anger=as.numeric(levels(Model_Anger))[Model_Anger],Model_Happy=as.numeric(levels(Model_Happy))[Model_Happy]) %>% 
+    group_by(chatid) %>% 
+    summarise(Anger=sum(Model_Anger),Happy=sum(Model_Happy)) %>% 
+    mutate(Tot=Anger+Happy,Anger=Anger/Tot,Happy=Happy/Tot) %>% 
+    pivot_longer(c("Anger","Happy"),names_to = "Emotion",values_to = "Percent") %>% 
+    ggplot()+
+    geom_bar(aes(x=Emotion,y=Percent,fill=Emotion),stat="identity",show.legend = F)+
+    geom_text(aes(x=Emotion,y = Percent/1.1,label=paste(round(Percent*100,2),"%")),size=7 )+
+    coord_flip()+
+    ggtitle("Happiness VS Anger")+
+    theme_classic()+
+    theme(  panel.background = element_rect(fill = "aliceblue"))
+  })
+ 
+   output$KeyWords <- renderPlot({
+    wordcloud(words = tidy_data_idf %>% filter(chatid==input$SelChat) %>% .$word, freq = tidy_data_idf %>% filter(chatid==input$SelChat) %>% .$tf_idf, min.freq = 1,max.words=30, random.order=FALSE, rot.per=0, colors=brewer.pal(5, "Dark2"),scale = c(2,1))+title((main = list("KEY WORDS", cex = 1.5, font = 20)))
+  })
+  
+})
+
+shinyApp(ui = ui, server = server)
+```
+
