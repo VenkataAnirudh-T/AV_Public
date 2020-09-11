@@ -107,16 +107,7 @@ ui <- fluidPage(
     
     tags$h3(id="welcome","Welcome"),
     
-    #tags$head(tags$script(src="https://widget.morphii.com/v2/morphii-widget.min.js")),
-    #includeScript(path = "index.js"),
-    #
-    #fluidRow(
-    #    column( tags$h4("How did you feel before your visit?"),
-    #            tags$div(id="widget-q1"),
-    #            width = 6),
-    #    column(textOutput("emoticon"),width =6)
-    #),
-    
+
     tags$h5(id="note","This survey shows you various Customer and Chatbot interaction texts. 
             You need to read the conversation and submit your opinion if the customer is happy or angry at each highlighted sentence, if so at what level (on 0-5 scale). 
             There is a timer set to rate each sentence in the chat. 
