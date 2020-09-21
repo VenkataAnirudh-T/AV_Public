@@ -1,6 +1,4 @@
-# AV_Public
-Project Reports
-
+# All Projects Description
 
 ## Chat Bot Survey Using Shiny & R
 Project to develop an online survey platform, for collecting customer sentiment data in the context of Chat bot - Customer conversation. Data collected from this survey will help build machine learning algorithm another concurrent project (MAD Dashboard - Sentiment Analysis Project) that I am working on.
