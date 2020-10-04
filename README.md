@@ -18,7 +18,7 @@ Various techniques such as sentiment analysis, text mining and machine learning 
 Live Project Link:https://anirudh-niu.shinyapps.io/MAD-Dashboard/
 Please Note: There may be temporary outages at times as project still underdevelopment.
 
-# Covid Tracking Dashboard - Tableau
+## Covid Tracking Dashboard - Tableau
 This is a project to track Covid 19 cases and couple of other metrics on Global and United States level.
 Data was extracted, cleansed and wrangled using Tableau Prep. Various measures, both default and calculated were plotted on the worksheets. All brought together and finely arranged in a workbook and published for end user to visualize.
 Live Project Link: https://public.tableau.com/profile/venkata.anirudh2414#!/vizhome/Covid19-GlobalVisualization/COVID19Global
