@@ -25,6 +25,12 @@ Live Project Link: https://public.tableau.com/profile/venkata.anirudh2414#!/vizh
 Data Source: Humanitarian Data Exchange
 Last Refreshed: 08/24/2020
 
+## Sales Analysis Project - Spotfire
+This is a project to analyze internet sales for Adventure works, an organization that sells bikes and other sporting goods.
+It includes performing transformations, joins and creating calculated columns as well as hierarchys to build reigional, customer and products report.
+Live Project Link: https://spotfire-next.cloud.tibco.com/spotfire/wp/OpenAnalysis?file=/Users/mti4yfcroy4pqzfxmmlvsulgxftabepa/Public/AW_SalesReport_VenkatAnirudhThota
+Data Source: Adventure works
+
 ## Analysis and Modelling of Big Data using R and Spark
 Project involves analysis of Divvy Bikes Share data that contains over 17 million records and inspecting influence of external factors such as weather on bookings. Created models to predict future bookings along with analysis of factors that influence future decision making based on inferences from data.
 
